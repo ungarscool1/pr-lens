@@ -1,0 +1,96 @@
+# PR Lens
+
+A private, local review layer for GitHub pull requests. Paste a PR link, PR Lens fetches it
+through your own `gh`, runs one read-only pass through your own `claude` CLI, and overlays a
+few ranked attention points on a GitHub-style diff. Notes stay on your machine.
+
+Status: **phase 1 (MVP)**. See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
+and what later phases add.
+
+## Requirements
+
+- macOS (Linux should work; not tested yet)
+- Node.js 20+ and [pnpm](https://pnpm.io) 10+
+- [GitHub CLI](https://cli.github.com) (`gh`)
+- [Claude Code](https://code.claude.com) (`claude`)
+
+## Setup
+
+```bash
+pnpm install
+```
+
+Log in to both CLIs once, in a terminal. PR Lens reuses these logins and never sees the tokens.
+
+```bash
+gh auth login
+```
+
+```bash
+claude
+```
+
+(`claude` asks you to log in on first start; quit it once you are in.)
+
+Optional: instead of the interactive login, run `claude setup-token` and paste the token in
+**Settings → Claude OAuth token**. It is encrypted with the system keychain (Electron
+`safeStorage`) and only handed to the `claude` process.
+
+## Run
+
+```bash
+pnpm dev
+```
+
+Paste a PR link (`https://github.com/owner/repo/pull/123`) or `owner/repo#123` into the field at
+the top and press Enter. PRs under the auto-run budget (60k input tokens by default) are
+reviewed straight away; bigger ones wait for **Run review**.
+
+If the header shows `not found` or `not logged in`, open **Settings** (click the status chips):
+the health check says what is missing, and you can point PR Lens at `gh` / `claude` explicitly.
+GUI apps on macOS do not inherit your shell `PATH`; PR Lens asks your login shell for it and
+falls back to `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.claude/local`.
+
+Keyboard: `j` / `k` next and previous note, `s` mark seen, `d` dismiss, and inside a diff
+`↑` / `↓` to move between lines and `Enter` to add a private note.
+
+## Build
+
+```bash
+pnpm build
+```
+
+```bash
+pnpm start
+```
+
+`pnpm build` writes the bundles to `out/`; `pnpm start` runs that build. Packaging into a
+signed `.app` is not set up yet.
+
+## Develop
+
+```bash
+pnpm test
+```
+
+```bash
+pnpm lint
+```
+
+```bash
+pnpm typecheck
+```
+
+`pnpm format` runs Prettier. Tests cover the pure logic (diff parsing, line IDs, noise globs,
+note validation and ranking, secret redaction, CLI envelope parsing, binary resolution).
+
+## What leaves your machine
+
+- `gh` calls to GitHub, with your `gh` login. Read-only: `gh pr view`, `gh pr diff`, `gh issue view`.
+- One `claude -p` call per review with the PR title, description, linked issues and the diff of
+  non-noise files. Likely secrets are masked first and listed in the sidebar. The call runs with
+  no tools, no MCP servers, no settings files and an allow-listed environment
+  (`ANTHROPIC_API_KEY` and GitHub tokens are never passed).
+
+Private notes and seen/dismissed state are stored as JSON under the app's user-data directory
+(`~/Library/Application Support/pr-lens/notes/`).

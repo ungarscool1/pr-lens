@@ -1,0 +1,5 @@
+out
+dist
+design
+pnpm-lock.yaml
+src/renderer/src/styles/ds.css

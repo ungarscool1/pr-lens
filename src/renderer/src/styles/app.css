@@ -1,0 +1,181 @@
+/* App-level tokens on top of ds.css: the mono face, diff and severity colours the design
+   uses inline, and a dark theme derived from the system (ramps inverted step for step, so
+   every "100 fill + 800 text" pair keeps its contrast). */
+
+:root {
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --diff-add-bg: oklch(0.962 0.035 150);
+  --diff-add-gutter: oklch(0.915 0.06 150);
+  --diff-add-mark: oklch(0.45 0.11 150);
+  --diff-add-word: oklch(0.86 0.1 150);
+  --diff-del-bg: oklch(0.962 0.03 25);
+  --diff-del-gutter: oklch(0.915 0.05 25);
+  --diff-del-mark: oklch(0.48 0.13 25);
+  --diff-del-word: oklch(0.87 0.085 25);
+  --diff-add-count: oklch(0.48 0.11 150);
+  --diff-del-count: oklch(0.5 0.13 25);
+  --diff-ctx-gutter: var(--color-neutral-100);
+  --diff-num: var(--color-neutral-500);
+  --diff-hl: var(--color-accent-300);
+  --diff-empty: repeating-linear-gradient(
+    135deg,
+    var(--color-neutral-200) 0 1px,
+    var(--color-neutral-100) 1px 6px
+  );
+
+  --syn-kw: var(--color-accent-800);
+  --syn-type: oklch(0.45 0.11 285);
+  --syn-str: oklch(0.48 0.1 60);
+  --syn-com: var(--color-neutral-600);
+  --syn-fn: var(--color-accent-700);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #161819;
+    --color-surface: #1e2022;
+    --color-text: #e4e5e6;
+    --color-accent: #749dc4;
+    --color-accent-2: #7e9cb8;
+    --color-divider: color-mix(in srgb, #e4e5e6 16%, transparent);
+
+    --color-neutral-100: #2b2b2d;
+    --color-neutral-200: #424244;
+    --color-neutral-300: #5d5d60;
+    --color-neutral-400: #7a7a7d;
+    --color-neutral-500: #98989b;
+    --color-neutral-600: #b7b7ba;
+    --color-neutral-700: #d4d4d7;
+    --color-neutral-800: #e7e7ea;
+    --color-neutral-900: #f5f5f8;
+
+    --color-accent-100: #1d2d3d;
+    --color-accent-200: #2c455d;
+    --color-accent-300: #416180;
+    --color-accent-400: #597ea3;
+    --color-accent-500: #749dc4;
+    --color-accent-600: #94bce3;
+    --color-accent-700: #b5d9fd;
+    --color-accent-800: #d6ebff;
+    --color-accent-900: #eef6ff;
+
+    --color-accent-2-100: #1f2d3a;
+    --color-accent-2-200: #314457;
+    --color-accent-2-300: #486077;
+    --color-accent-2-400: #627d98;
+    --color-accent-2-500: #7e9cb8;
+    --color-accent-2-600: #9ebbd8;
+    --color-accent-2-700: #bdd8f2;
+    --color-accent-2-800: #d6ebff;
+    --color-accent-2-900: #eef6ff;
+
+    --shadow-sm: 0 0 0 1px color-mix(in srgb, #e4e5e6 8%, transparent), 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-md:
+      0 0 0 1px color-mix(in srgb, #e4e5e6 8%, transparent), 0 3px 10px rgb(0 0 0 / 0.55);
+    --shadow-lg:
+      0 0 0 1px color-mix(in srgb, #e4e5e6 10%, transparent), 0 12px 32px rgb(0 0 0 / 0.6);
+
+    --diff-add-bg: oklch(0.27 0.04 150);
+    --diff-add-gutter: oklch(0.32 0.06 150);
+    --diff-add-mark: oklch(0.78 0.12 150);
+    --diff-add-word: oklch(0.4 0.09 150);
+    --diff-del-bg: oklch(0.27 0.04 25);
+    --diff-del-gutter: oklch(0.32 0.06 25);
+    --diff-del-mark: oklch(0.78 0.12 25);
+    --diff-del-word: oklch(0.42 0.1 25);
+    --diff-add-count: oklch(0.78 0.12 150);
+    --diff-del-count: oklch(0.75 0.13 25);
+    --syn-type: oklch(0.8 0.1 285);
+    --syn-str: oklch(0.82 0.1 60);
+
+    color-scheme: dark;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  overflow: hidden;
+  /* Barlow's contextual alternates turn "--flag" into an em dash; code review text must be literal. */
+  font-feature-settings:
+    'liga' 0,
+    'calt' 0;
+}
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+a {
+  color: var(--color-accent-700);
+}
+a:hover {
+  color: var(--color-accent-900);
+}
+code,
+.mono {
+  font-family: var(--font-mono);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* — severity / risk tags (mono palette: weight, not hue, carries severity) — */
+.tag.sev {
+  white-space: nowrap;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid;
+}
+.sev-high {
+  background: var(--color-accent-900);
+  color: var(--color-neutral-100);
+  border-color: var(--color-accent-900);
+}
+.sev-medium {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+  border-color: var(--color-accent-300);
+}
+.sev-low,
+.sev-none {
+  background: transparent;
+  color: var(--color-neutral-700);
+  border-color: var(--color-neutral-400);
+}
+.sev-mine {
+  background: transparent;
+  color: var(--color-neutral-800);
+  border-color: var(--color-neutral-500);
+}
+.sev-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border: 1px solid;
+}
+.sev-dot.sev-low,
+.sev-dot.sev-mine {
+  background: transparent;
+}
+
+.kicker-mono {
+  font: 500 10.5px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}

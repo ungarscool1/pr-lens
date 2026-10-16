@@ -1,0 +1,156 @@
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+.app-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.view {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+.view[hidden] {
+  display: none;
+}
+.boot-error {
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 13.5px;
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-divider);
+  min-width: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-color: var(--color-accent);
+}
+.brand-mark > span {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 50%;
+}
+.brand-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+}
+.tabs {
+  display: flex;
+  border: 1px solid var(--color-divider);
+  flex: none;
+}
+.tab {
+  padding: 6px 14px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+  background: transparent;
+  border: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tab + .tab {
+  border-left: 1px solid var(--color-divider);
+}
+.tab:hover:not(:disabled) {
+  background: var(--color-accent-100);
+}
+.tab[aria-current='page'] {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+.tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.pr-input {
+  flex: 1;
+  max-width: 420px;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 34px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-600);
+}
+.pr-input:focus-within {
+  border-color: var(--color-accent);
+}
+.pr-input.invalid {
+  border-color: var(--diff-del-mark);
+}
+.pr-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--color-text);
+  font: 13px var(--font-mono);
+}
+.pr-input input::placeholder {
+  color: var(--color-neutral-600);
+}
+.pr-input-error {
+  font: 11px var(--font-mono);
+  color: var(--diff-del-mark);
+  white-space: nowrap;
+}
+.status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font: 12px var(--font-mono);
+  color: var(--color-neutral-700);
+  flex: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.status:hover,
+.status[aria-current='page'] {
+  background: var(--color-accent-100);
+}
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--color-accent);
+}
+.status-dot.ok {
+  background: var(--color-accent);
+}

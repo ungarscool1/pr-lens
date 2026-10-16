@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/industry-e86a9921-67fc-4ecb-bb37-7041ea00570d/styles.css">
+<script src="_ds/industry-e86a9921-67fc-4ecb-bb37-7041ea00570d/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>body{margin:0;background:var(--color-bg);overflow:hidden}a{color:var(--color-accent-700)}a:hover{color:var(--color-accent-900)}button{font:inherit}</style>
+</helmet>
+<div style="height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr);font-family:var(--font-body);color:var(--color-text)">
+
+<header style="display:flex;align-items:center;gap:20px;padding:10px 20px;border-bottom:1px solid var(--color-divider);min-width:0">
+<a href="PR Lens.dc.html" style="display:flex;align-items:center;gap:10px;flex:none;text-decoration:none;color:inherit">
+<div class="blueprint" style="width:26px;height:26px;display:grid;place-items:center;border-color:var(--color-accent)"><i class="corner tl"></i><i class="corner br"></i><span style="width:10px;height:10px;border:1.5px solid var(--color-accent);border-radius:50%"></span></div>
+<span style="font-family:var(--font-heading);font-weight:600;font-size:21px;letter-spacing:-0.01em">PR Lens</span>
+</a>
+<div style="display:flex;border:1px solid var(--color-divider);flex:none">
+<a href="PR Lens.dc.html" style="padding:6px 14px;font-family:var(--font-heading);font-weight:600;font-size:14px;color:var(--color-text);text-decoration:none;display:flex;align-items:center;gap:7px" style-hover="background:var(--color-accent-100)">Inbox<span style="font:11px 'IBM Plex Mono',monospace;color:var(--color-neutral-600)">8</span></a><span style="padding:6px 14px;font-family:var(--font-heading);font-weight:600;font-size:14px;background:var(--color-accent);color:var(--color-bg);border-left:1px solid var(--color-accent);white-space:nowrap">#812</span>
+<span style="padding:6px 14px;font-family:var(--font-heading);font-weight:600;font-size:14px;border-left:1px solid var(--color-divider);color:var(--color-neutral-700);cursor:pointer" style-hover="background:var(--color-accent-100)">Compare</span>
+</div>
+<div style="flex:1;max-width:420px;min-width:160px;display:flex;align-items:center;gap:8px;padding:0 10px;height:34px;border:1px solid var(--color-divider);background:var(--color-neutral-100)">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-neutral-600);flex:none"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7"></path><path d="M6 9v12"></path></svg>
+<span style="font:13px 'IBM Plex Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">github.com/acme/api/pull/812</span>
+</div>
+<div style="margin-left:auto;display:flex;align-items:center;gap:14px;font:12px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700);flex:none">
+<span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;background:var(--color-accent)"></span>claude · subscription</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;background:var(--color-accent)"></span>gh · read-only</span>
+</div>
+</header>
+
+<div style="display:grid;grid-template-columns:288px minmax(0,1fr);min-height:0">
+
+<aside style="border-right:1px solid var(--color-divider);overflow-y:auto;display:flex;flex-direction:column;min-height:0">
+<div style="padding:18px 16px 8px;display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+<span style="font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap">Reading order</span>
+<span style="font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600);white-space:nowrap">AI order</span>
+</div>
+<div style="display:flex;flex-direction:column;padding:0 8px">
+<sc-for list="{{files}}" as="f" hint-placeholder-count="2">
+<button onClick="{{f.jump}}" style="display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;padding:9px 8px;text-align:left;background:transparent;border:0;cursor:pointer;color:var(--color-text)" style-hover="background:var(--color-accent-100)">
+<span style="font:500 12px/20px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-accent-700)">{{f.order}}</span>
+<span style="display:flex;flex-direction:column;gap:2px;min-width:0">
+<span style="font:500 13.5px/20px 'IBM Plex Mono',ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{f.name}}</span>
+<span style="font-size:12px;line-height:1.35;color:var(--color-neutral-700)">{{f.why}}</span>
+<span style="font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600);margin-top:2px">{{f.sideMeta}}</span>
+</span>
+<span class="tag" style="white-space:nowrap;padding:1px 7px;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;background:{{f.riskBg}};color:{{f.riskFg}};border:1px solid {{f.riskBd}}">{{f.risk}}</span>
+</button>
+</sc-for>
+<div style="display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:start;padding:9px 8px;color:var(--color-neutral-600)">
+<span style="font:12px/20px 'IBM Plex Mono',ui-monospace,monospace">—</span>
+<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:13.5px/20px 'IBM Plex Mono',ui-monospace,monospace;text-decoration:line-through;text-decoration-color:var(--color-neutral-400)">pnpm-lock.yaml</span><span style="font-size:12px">Lockfile · hidden, not reviewed</span></span>
+<span style="font:11px/20px 'IBM Plex Mono',ui-monospace,monospace;white-space:nowrap">+41 −12</span>
+</div>
+</div>
+
+<div style="padding:22px 16px 8px;display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-top:1px solid var(--color-divider);margin-top:10px">
+<span style="font-family:var(--font-heading);font-weight:600;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap">Attention points</span>
+<span style="font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600);white-space:nowrap">{{openCount}} open</span>
+</div>
+<div style="display:flex;flex-direction:column;padding:0 8px">
+<sc-for list="{{ranked}}" as="r" hint-placeholder-count="4">
+<button onClick="{{r.jump}}" style="display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;padding:8px;text-align:left;background:transparent;border:0;cursor:pointer;color:var(--color-text);opacity:{{r.opacity}}" style-hover="background:var(--color-accent-100)">
+<span style="font:500 12px/20px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-accent-700)">{{r.rank}}</span>
+<span style="display:flex;flex-direction:column;gap:3px;min-width:0">
+<span style="font-size:13.5px;line-height:1.35;text-decoration:{{r.strike}}">{{r.title}}</span>
+<span style="display:flex;align-items:center;gap:6px;font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600)"><span style="width:7px;height:7px;flex:none;background:{{r.dot}};border:1px solid {{r.dotBd}}"></span>{{r.meta}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+
+<div style="margin-top:auto;padding:14px 16px;border-top:1px solid var(--color-divider);display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font:11.5px/1.5 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700)">
+<b style="font-weight:500;color:var(--color-text)">j / k</b><span>next / previous note</span>
+<b style="font-weight:500;color:var(--color-text)">s</b><span>mark seen</span>
+<b style="font-weight:500;color:var(--color-text)">d</b><span>dismiss</span>
+<b style="font-weight:500;color:var(--color-text)">a</b><span>ask Claude</span>
+</div>
+<div style="padding:16px;border-top:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px">
+<span class="card-kicker">Analysis · review.v1</span>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font:11.5px/1.5 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700)">
+<span>head</span><span style="color:var(--color-text)">9bd04e1 · cached</span>
+<span>usage</span><span style="color:var(--color-text)">41.2k in · 2.1k out</span>
+<span>chunks</span><span style="color:var(--color-text)">1 · no merge pass</span>
+<span>dropped</span><span style="color:var(--color-text)">1 · unknown file F3</span>
+</div>
+<button class="btn btn-secondary" style="margin-top:4px;justify-content:space-between;width:100%">Re-run review<span style="font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700)">~43k tokens</span></button>
+</div>
+</aside>
+
+<div style="position:relative;min-height:0;display:flex;flex-direction:column">
+<main ref="{{mainRef}}" style="flex:1;overflow-y:auto;min-height:0">
+
+<div style="padding:24px 28px 20px;display:flex;flex-direction:column;gap:12px;max-width:1240px">
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font:12px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600)"><a href="PR Lens.dc.html" style="text-decoration:none;white-space:nowrap">← Inbox</a><span>/</span><span>acme/api</span><span>/</span><span>#812</span><span style="margin-left:auto;white-space:nowrap">1 of 8 waiting on you · <a href="PR Lens.dc.html" style="text-decoration:none">next acme/api#809 →</a></span></div>
+<h1 style="margin:0;font-size:34px;line-height:1.1">Cache refreshed sessions in memory <span style="color:var(--color-neutral-500);font-weight:400">#812</span></h1>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:13.5px;color:var(--color-neutral-800)">
+<span class="tag" style="white-space:nowrap;background:var(--color-accent);color:var(--color-bg);font-family:var(--font-heading);font-weight:600;font-size:12.5px;padding:3px 10px">Open</span>
+<span><b>maria-k</b> wants to merge 3 commits into <code style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:1px 6px;background:var(--color-accent-100);color:var(--color-accent-800)">main</code> from <code style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:1px 6px;background:var(--color-accent-100);color:var(--color-accent-800)">feat/session-cache</code></span>
+<span style="font:12px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600)">3f2a91c…9bd04e1</span>
+<span class="tag tag-outline" style="white-space:nowrap;font-size:11px">Three-dot · same as GitHub</span>
+<span style="color:var(--color-neutral-700)">Closes <a href="#">#790</a> Users logged out after deploy</span>
+</div>
+<button onClick="{{toggleDesc}}" class="btn btn-ghost" style="align-self:flex-start;white-space:nowrap;padding-left:0;font-size:13.5px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate({{descChev}});transition:transform .15s"><path d="m9 18 6-6-6-6"></path></svg>{{descLabel}}</button>
+<sc-if value="{{showDesc}}">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px">
+<div style="border:1px solid var(--color-divider);padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.55">
+<span style="font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-600)">Description · maria-k</span>
+<p style="margin:0">Users get logged out after every deploy because the session store is cold for the first few seconds (#790). This adds an in-process memo so a refresh that misses the store can still succeed, and stops treating a missing session as an error.</p>
+<p style="margin:0"><b style="font-weight:500">Testing:</b> deployed to staging twice with no logouts. Unit tests pass locally.</p>
+</div>
+<div style="border:1px solid var(--color-divider);padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.55">
+<span style="font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-600)">Linked issue #790 · closes</span>
+<p style="margin:0"><b style="font-weight:500">Users logged out after deploy.</b> After each deploy roughly 4% of active users are signed out. Store warm-up takes 3–8 s and refreshes in that window fail with AuthError.</p>
+</div>
+</div>
+</sc-if>
+
+<div class="blueprint" style="margin-top:12px;display:flex;flex-wrap:wrap">
+<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+<div style="padding:16px 18px;display:flex;flex-direction:column;gap:6px;flex:1 1 380px;min-width:0">
+<span class="card-kicker" style="display:flex;align-items:center;gap:6px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>PR Lens summary · private</span>
+<p style="margin:0;font-size:15px;line-height:1.55;max-width:720px;text-wrap:pretty">Adds a process-local memo as a fallback when the session store misses, and makes <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">refreshSession</code> return <code style="font-family:'IBM Plex Mono',monospace;font-size:13px">null</code> instead of throwing on an expired token. The return-type change is the part most likely to break callers.</p>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(78px,1fr));flex:1 0 320px;max-width:440px;border-left:1px solid var(--color-divider)">
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-weight:600;font-size:30px;line-height:1">{{stats.high}}</span><span style="font-size:12px;color:var(--color-neutral-700)">High</span></div>
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-weight:600;font-size:30px;line-height:1">{{stats.medium}}</span><span style="font-size:12px;color:var(--color-neutral-700)">Medium</span></div>
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-weight:600;font-size:30px;line-height:1">{{stats.mine}}</span><span style="font-size:12px;color:var(--color-neutral-700)">Mine</span></div>
+<div style="padding:14px 16px;display:flex;flex-direction:column;gap:2px"><span style="font-family:var(--font-heading);font-weight:600;font-size:30px;line-height:1">{{stats.seen}}</span><span style="font-size:12px;color:var(--color-neutral-700)">Seen</span></div>
+</div>
+</div>
+</div>
+
+<div data-bar="1" style="position:sticky;top:0;z-index:5;height:52px;box-sizing:border-box;background:var(--color-bg);border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);padding:0 28px;display:flex;align-items:center;gap:14px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden">
+<div style="flex:none;display:flex;align-items:center;gap:10px;font:12.5px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700);white-space:nowrap"><span>{{viewedCount}}/2 viewed</span><span style="width:80px;height:4px;background:var(--color-neutral-300);display:flex"><span style="width:{{viewedPct}};background:var(--color-accent);transition:width .2s"></span></span></div>
+<div class="seg" style="flex:none">
+<sc-for list="{{filters}}" as="fl" hint-placeholder-count="3"><label class="seg-opt" style="white-space:nowrap"><input type="radio" name="flt" checked="{{fl.on}}" onChange="{{fl.pick}}">{{fl.label}}<span style="font:11px 'IBM Plex Mono',monospace;opacity:0.75">{{fl.count}}</span></label></sc-for>
+</div>
+<div style="margin-left:auto;flex:none;display:flex;align-items:center;gap:10px">
+<div class="seg">
+<label class="seg-opt"><input type="radio" name="view" checked="{{isUnified}}" onChange="{{setUnified}}">Unified</label>
+<label class="seg-opt"><input type="radio" name="view" checked="{{isSplit}}" onChange="{{setSplit}}">Split</label>
+</div>
+<button class="btn btn-secondary" onClick="{{nextNote}}" style="white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>Next note</button>
+</div>
+</div>
+
+<div style="padding:20px 28px 120px;display:flex;flex-direction:column;gap:20px;max-width:1240px">
+<sc-for list="{{files}}" as="f" hint-placeholder-count="2">
+<section id="{{f.domId}}" style="border:1px solid var(--color-divider);background:var(--color-neutral-100)">
+<div style="position:sticky;top:52px;z-index:4;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--color-bg);border-bottom:1px solid var(--color-divider);flex-wrap:wrap">
+<button onClick="{{f.toggle}}" class="btn btn-ghost" style="padding:2px;color:var(--color-neutral-700)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate({{f.chev}});transition:transform .15s"><path d="m6 9 6 6 6-6"></path></svg></button>
+<span style="font:13.5px 'IBM Plex Mono',ui-monospace,monospace"><span style="color:var(--color-neutral-600)">{{f.dir}}</span><b style="font-weight:600">{{f.name}}</b></span>
+<span style="font:12px 'IBM Plex Mono',ui-monospace,monospace"><span style="color:oklch(0.48 0.11 150)">+{{f.add}}</span> <span style="color:oklch(0.5 0.13 25)">−{{f.del}}</span></span>
+<span style="display:flex;gap:2px"><sc-for list="{{f.blocks}}" as="b"><span style="width:8px;height:8px;background:{{b.c}}"></span></sc-for></span>
+<span class="tag tag-neutral" style="white-space:nowrap;font-size:10.5px;padding:1px 7px">{{f.status}}</span>
+<span class="tag" style="white-space:nowrap;padding:1px 7px;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;background:{{f.riskBg}};color:{{f.riskFg}};border:1px solid {{f.riskBd}}">{{f.riskLabel}}</span>
+<label style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:3px 9px;border:1px solid var(--color-divider);background:{{f.viewedBg}}"><input type="checkbox" checked="{{f.viewed}}" onChange="{{f.toggleViewed}}" style="accent-color:var(--color-accent);margin:0">Viewed</label>
+</div>
+<sc-if value="{{f.open}}" hint-placeholder-val="{{ true }}">
+<div style="font:12.5px/20px 'IBM Plex Mono',ui-monospace,monospace">
+<sc-for list="{{f.rows}}" as="row" hint-placeholder-count="10">
+
+<sc-if value="{{row.isHunk}}">
+<div style="display:grid;grid-template-columns:{{hunkCols}};background:var(--color-accent-100);color:var(--color-accent-800);line-height:30px">
+<span title="Expand context" style="display:grid;place-items:center;background:var(--color-accent-200);color:var(--color-accent-700);cursor:pointer" style-hover="background:var(--color-accent-300)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg></span>
+<span style="padding:0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{row.text}}</span>
+</div>
+</sc-if>
+
+<sc-if value="{{row.isLine}}">
+<div style="display:grid;grid-template-columns:52px 52px 24px minmax(0,1fr);background:{{row.bg}}">
+<span style="background:{{row.gbg}};color:{{row.numC}};text-align:right;padding-right:10px;user-select:none">{{row.o}}</span>
+<span style="position:relative;background:{{row.gbg}};color:{{row.numC}};text-align:right;padding-right:10px;user-select:none">{{row.n}}<button onClick="{{row.add}}" title="Add a private note" style="position:absolute;inset:0;opacity:0;background:transparent;border:0;padding:0;cursor:pointer;display:flex;align-items:center" style-hover="opacity:1"><span style="margin-left:-9px;width:20px;height:20px;display:grid;place-items:center;background:var(--color-accent);color:var(--color-bg);font-size:15px;line-height:1">+</span></button></span>
+<span style="color:{{row.markC}};text-align:center;user-select:none">{{row.mark}}</span>
+<span style="white-space:pre-wrap;word-break:break-word;padding-right:20px;min-height:20px"><sc-for list="{{row.toks}}" as="t"><span style="color:{{t.c}};font-style:{{t.i}};background:{{t.bg}}">{{t.s}}</span></sc-for></span>
+</div>
+</sc-if>
+
+<sc-if value="{{row.isPair}}">
+<div style="display:grid;grid-template-columns:52px 24px minmax(0,1fr) 52px 24px minmax(0,1fr)">
+<span style="background:{{row.l.gbg}};color:{{row.l.numC}};text-align:right;padding-right:10px;user-select:none">{{row.l.no}}</span>
+<span style="background:{{row.l.bg}};color:{{row.l.markC}};text-align:center;user-select:none">{{row.l.mark}}</span>
+<span style="background:{{row.l.bg}};white-space:pre-wrap;word-break:break-word;padding-right:14px;min-height:20px"><sc-for list="{{row.l.toks}}" as="t"><span style="color:{{t.c}};font-style:{{t.i}};background:{{t.bg}}">{{t.s}}</span></sc-for></span>
+<span style="position:relative;background:{{row.r.gbg}};color:{{row.r.numC}};text-align:right;padding-right:10px;user-select:none;border-left:1px solid var(--color-divider)">{{row.r.no}}<button onClick="{{row.add}}" title="Add a private note" style="position:absolute;inset:0;opacity:0;background:transparent;border:0;padding:0;cursor:pointer;display:flex;align-items:center" style-hover="opacity:1"><span style="margin-left:-9px;width:20px;height:20px;display:grid;place-items:center;background:var(--color-accent);color:var(--color-bg);font-size:15px;line-height:1">+</span></button></span>
+<span style="background:{{row.r.bg}};color:{{row.r.markC}};text-align:center;user-select:none">{{row.r.mark}}</span>
+<span style="background:{{row.r.bg}};white-space:pre-wrap;word-break:break-word;padding-right:14px;min-height:20px"><sc-for list="{{row.r.toks}}" as="t"><span style="color:{{t.c}};font-style:{{t.i}};background:{{t.bg}}">{{t.s}}</span></sc-for></span>
+</div>
+</sc-if>
+
+<sc-if value="{{row.isNote}}">
+<div id="{{row.n.domId}}" style="padding:14px 24px 16px {{noteIndent}};background:var(--color-bg);border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);font-family:var(--font-body);line-height:1.5">
+
+<sc-if value="{{row.n.isBar}}">
+<button onClick="{{row.n.barClick}}" style="max-width:820px;width:100%;display:flex;align-items:center;gap:10px;padding:7px 12px;border:1px dashed var(--color-neutral-400);background:transparent;cursor:pointer;text-align:left;color:var(--color-neutral-700)" style-hover="border-color:var(--color-accent);color:var(--color-text)">
+<span style="font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-accent-700)">{{row.n.who}}</span>
+<span class="tag" style="white-space:nowrap;padding:1px 7px;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;background:{{row.n.sevBg}};color:{{row.n.sevFg}};border:1px solid {{row.n.sevBd}}">{{row.n.sev}}</span>
+<span style="font-size:13.5px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:{{row.n.strike}}">{{row.n.barText}}</span>
+<span style="font-size:12.5px;color:var(--color-accent-700);flex:none">{{row.n.barAction}}</span>
+</button>
+</sc-if>
+
+<sc-if value="{{row.n.isOpen}}">
+<div class="blueprint" style="max-width:820px;padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px;border-color:{{row.n.frame}}">
+<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<span style="display:flex;align-items:center;gap:6px;font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-accent-700)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>{{row.n.who}}</span>
+<span class="tag" style="white-space:nowrap;padding:1px 7px;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;background:{{row.n.sevBg}};color:{{row.n.sevFg}};border:1px solid {{row.n.sevBd}}">{{row.n.sev}}</span>
+<sc-if value="{{row.n.hasCat}}"><span class="tag tag-neutral" style="white-space:nowrap;padding:1px 8px;font-size:11px">{{row.n.cat}}</span></sc-if>
+<sc-if value="{{row.n.seen}}"><span class="tag tag-outline" style="white-space:nowrap;padding:1px 8px;font-size:11px">Seen</span></sc-if>
+<sc-if value="{{row.n.promoted}}"><span class="tag tag-accent" style="white-space:nowrap;padding:1px 8px;font-size:11px">In your pending review</span></sc-if>
+<span style="margin-left:auto;white-space:nowrap;font:11px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-600)">{{row.n.loc}}</span>
+<button onClick="{{row.n.collapse}}" class="btn btn-ghost" title="Collapse" style="padding:2px;color:var(--color-neutral-700)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></button>
+</div>
+<sc-if value="{{row.n.hasTitle}}"><div style="font-family:var(--font-heading);font-weight:600;font-size:19px;line-height:1.2">{{row.n.title}}</div></sc-if>
+<p style="margin:0;font-size:14.5px;line-height:1.55;max-width:700px;text-wrap:pretty">{{row.n.body}}</p>
+<sc-if value="{{row.n.hasRefs}}">
+<div style="display:flex;flex-wrap:wrap;gap:6px">
+<sc-for list="{{row.n.refs}}" as="rf"><span style="display:flex;gap:6px;font:11.5px 'IBM Plex Mono',ui-monospace,monospace;padding:2px 8px;border:1px solid var(--color-divider);color:var(--color-neutral-800)"><b style="font-weight:600;color:var(--color-accent-700)">{{rf.id}}</b>{{rf.label}}</span></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{row.n.hasQ}}">
+<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border:1px dashed var(--color-neutral-400);max-width:700px">
+<div style="display:flex;flex-direction:column;gap:3px;flex:1"><span style="font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-600)">Question for the author</span><span style="font-size:14px">{{row.n.q}}</span></div>
+<button onClick="{{row.n.copyQ}}" class="btn btn-ghost" style="font-size:13px;flex:none">{{row.n.copyLabel}}</button>
+</div>
+</sc-if>
+<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px">
+<button onClick="{{row.n.ask}}" class="btn btn-secondary" style="white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"></path><path d="M12 19h8"></path></svg>Ask Claude</button>
+<button onClick="{{row.n.promote}}" class="btn btn-secondary" style="white-space:nowrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"></path><path d="M7 7h10v10"></path></svg>Promote to comment</button>
+<span style="flex:1"></span>
+<button onClick="{{row.n.seenToggle}}" class="btn btn-ghost" style="white-space:nowrap">{{row.n.seenLabel}}</button>
+<button onClick="{{row.n.dismiss}}" class="btn btn-ghost" style="white-space:nowrap">{{row.n.dismissLabel}}</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{row.isComposer}}">
+<div style="padding:14px 24px 16px {{noteIndent}};background:var(--color-bg);border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider);font-family:var(--font-body)">
+<div class="blueprint" style="max-width:820px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+<span style="font:500 10.5px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-neutral-700)">Private note · {{composerLoc}}</span>
+<textarea class="input" value="{{draft}}" onChange="{{setDraft}}" placeholder="Only you see this. Promote it later if it should go to the author." style="min-height:76px;font-size:14px"></textarea>
+<div style="display:flex;gap:8px;justify-content:flex-end">
+<button onClick="{{cancelComposer}}" class="btn btn-ghost" style="white-space:nowrap">Cancel</button>
+<button onClick="{{saveComposer}}" class="btn btn-primary">Save note</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</sc-for>
+</div>
+</sc-if>
+</section>
+</sc-for>
+
+<section style="border:1px dashed var(--color-neutral-400);padding:10px 14px;display:flex;align-items:center;gap:10px;font:13px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-neutral-700)">
+<span style="white-space:nowrap">pnpm-lock.yaml</span><span class="tag tag-neutral" style="white-space:nowrap;font-size:10.5px;padding:1px 7px">lockfile</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">+41 −12 · collapsed by noise rule <b style="font-weight:500">**/pnpm-lock.yaml</b></span><span style="white-space:nowrap;color:var(--color-accent-700);cursor:pointer">Load diff</span>
+</section>
+</div>
+</main>
+
+<sc-if value="{{hasTerminal}}">
+<div style="height:320px;flex:none;display:flex;flex-direction:column;background:var(--color-accent-900);color:var(--color-neutral-100);border-top:1px solid var(--color-accent-800)">
+<div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--color-accent-800)">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"></path><path d="M12 19h8"></path></svg>
+<span style="font-family:var(--font-heading);font-weight:600;font-size:15px">Ask Claude</span>
+<span style="font:11.5px 'IBM Plex Mono',ui-monospace,monospace;color:var(--color-accent-300)">worktree acme__api__pr812__9bd04e1 · plan mode · embedded</span>
+<span style="margin-left:auto"></span>
+<button class="btn" style="color:var(--color-neutral-100);border-color:var(--color-accent-700);font-size:13px" style-hover="background:var(--color-accent-800)">Open in Terminal</button>
+<button onClick="{{closeTerminal}}" class="btn" style="color:var(--color-neutral-100);border-color:var(--color-accent-700);padding:5px" style-hover="background:var(--color-accent-800)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+</div>
+<div style="flex:1;overflow-y:auto;padding:12px 16px;font:12.5px/1.65 'IBM Plex Mono',ui-monospace,monospace;white-space:pre-wrap">
+<sc-for list="{{termLines}}" as="tl"><div style="color:{{tl.c}}">{{tl.t}}</div></sc-for>
+<div style="display:flex;gap:8px;margin-top:6px"><span style="color:var(--color-accent-300)">&gt;</span><span style="width:8px;height:17px;background:var(--color-neutral-100)"></span></div>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+
+<sc-if value="{{hasPromote}}">
+<div class="dialog-backdrop" style="z-index:50">
+<div class="dialog blueprint" style="width:min(560px,100%);background:var(--color-bg);gap:14px">
+<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+<div class="dialog-title" style="font-size:24px">Add to your pending review?</div>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font:12.5px/1.5 'IBM Plex Mono',ui-monospace,monospace">
+<span style="color:var(--color-neutral-600)">PR</span><span>acme/api#812 · head 9bd04e1</span>
+<span style="color:var(--color-neutral-600)">Line</span><span>{{promoteLoc}}</span>
+<span style="color:var(--color-neutral-600)">Token</span><span>PR_LENS_GH_WRITE_TOKEN · pull requests: write</span>
+</div>
+<div class="field"><label>Comment body (markdown)</label><textarea class="input" value="{{promoteBody}}" onChange="{{setPromoteBody}}" style="min-height:150px;font-size:13.5px;line-height:1.5"></textarea></div>
+<p style="margin:0;font-size:13.5px;color:var(--color-neutral-800)">The comment goes into your pending review. Nobody else sees it until you submit the review on GitHub.</p>
+<div class="dialog-actions">
+<button onClick="{{closePromote}}" class="btn btn-secondary" style="white-space:nowrap">Cancel</button>
+<button onClick="{{confirmPromote}}" class="btn btn-primary">Add to pending review</button>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ADD_BG = 'oklch(0.962 0.035 150)', ADD_GUT = 'oklch(0.915 0.06 150)', ADD_MK = 'oklch(0.45 0.11 150)';
+const DEL_BG = 'oklch(0.962 0.03 25)', DEL_GUT = 'oklch(0.915 0.05 25)', DEL_MK = 'oklch(0.48 0.13 25)';
+const CTX_GUT = 'var(--color-neutral-100)', NUM = 'var(--color-neutral-500)', HL = 'var(--color-accent-300)';
+const EMPTY = 'repeating-linear-gradient(135deg, var(--color-neutral-200) 0 1px, var(--color-neutral-100) 1px 6px)';
+const C = { kw: 'var(--color-accent-800)', type: 'oklch(0.45 0.11 285)', str: 'oklch(0.48 0.1 60)', num: 'oklch(0.48 0.1 60)', com: 'var(--color-neutral-600)', fn: 'var(--color-accent-700)' };
+const ADD_WORD = 'oklch(0.86 0.1 150)', DEL_WORD = 'oklch(0.87 0.085 25)';
+function paint(toks, r, bg) {
+  if (r[0] >= r[1]) return toks;
+  const out = []; let pos = 0;
+  toks.forEach(t => {
+    const a = pos, b = pos + t.s.length; pos = b;
+    const cuts = [a, Math.max(a, Math.min(b, r[0])), Math.max(a, Math.min(b, r[1])), b];
+    for (let k = 0; k < 3; k++) { const x = cuts[k], y = cuts[k + 1]; if (y > x) out.push({ ...t, s: t.s.slice(x - a, y - a), bg: k === 1 ? bg : 'transparent' }); }
+  });
+  return out;
+}
+const KW = new Set('import from export async function const let return if await throw new type null true false of as else'.split(' '));
+
+function tokenize(s) {
+  if (/^\s*(\/\/|\/\*\*|\*\/|\* |\*$)/.test(s)) return [{ s, c: C.com, i: 'italic', bg: 'transparent' }];
+  const out = [], re = /(\/\/.*$)|("(?:[^"\\]|\\.)*")|(\b\d[\d_]*\b)|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)|(\s+|.)/g;
+  let m;
+  const push = (t, c, i) => { const last = out[out.length - 1]; if (last && last.c === c && last.i === i) last.s += t; else out.push({ s: t, c, i, bg: 'transparent' }); };
+  while ((m = re.exec(s))) {
+    if (m[1]) push(m[1], C.com, 'italic');
+    else if (m[2]) push(m[2], C.str, 'normal');
+    else if (m[3]) push(m[3], C.num, 'normal');
+    else if (m[4]) push(m[4], KW.has(m[4]) ? C.kw : C.fn, 'normal');
+    else if (m[5]) push(m[5], KW.has(m[5]) ? C.kw : /^[A-Z]/.test(m[5]) ? C.type : 'inherit', 'normal');
+    else push(m[6], 'inherit', 'normal');
+  }
+  return out;
+}
+
+const FILES = [
+  { fid: 'F2', path: 'src/auth/memo.ts', status: 'added', risk: 'medium', why: 'New unbounded in-process cache', hunks: [
+    { o: 0, n: 1, header: '@@ -0,0 +1,8 @@', lines: [
+      ['+', 'import type { Session } from "./types";'], ['+', ''], ['+', 'const entries = new Map<string, Session>();'], ['+', ''],
+      ['+', 'export const memo = {'], ['+', '  get: (k: string) => entries.get(k),'], ['+', '  set: (k: string, s: Session) => entries.set(k, s),'], ['+', '};'] ] } ] },
+  { fid: 'F1', path: 'src/auth/session.ts', status: 'modified', risk: 'high', why: 'Changes the refresh failure contract', hunks: [
+    { o: 1, n: 1, header: '@@ -1,6 +1,7 @@', lines: [
+      [' ', 'import { store } from "./store";'], [' ', 'import { AuthError } from "./errors";'], ['+', 'import { memo } from "./memo";'],
+      [' ', 'import { metrics } from "../metrics";'], [' ', 'import type { Session } from "./types";'], [' ', ''], [' ', 'const SESSION_TTL = 1000 * 60 * 60 * 24;'] ] },
+    { o: 36, n: 37, header: '@@ -36,13 +37,16 @@ export async function refreshSession(req: Request)', lines: [
+      [' ', '/**'], [' ', ' * Extend the session behind a refresh cookie.'],
+      ['-', ' * Throws AuthError when the refresh token is unknown or expired.'], ['+', ' * Returns null when the refresh token is unknown or expired.'],
+      [' ', ' */'],
+      ['-', 'export async function refreshSession(req: Request): Promise<Session> {'], ['+', 'export async function refreshSession(req: Request): Promise<Session | null> {'],
+      [' ', '  const token = req.cookies.refresh;'], [' ', '  if (!token) throw new AuthError("missing refresh");'],
+      ['-', '  const session = await store.get(token);'], ['-', '  if (!session) throw new AuthError("refresh expired");'],
+      ['+', '  const session = (await store.get(token)) ?? memo.get(token);'], ['+', '  if (!session) return null;'], ['+', '  memo.set(token, session);'],
+      [' ', '  session.expiresAt = Date.now() + SESSION_TTL;'], [' ', '  await store.put(token, session);'],
+      ['+', '  metrics.increment("session.refresh");'], ['+', '  // TODO: evict memo on logout'],
+      [' ', '  return session;'], [' ', '}'] ] } ] }
+];
+FILES.forEach(f => {
+  let ord = 0, add = 0, del = 0;
+  f.hunks.forEach(h => {
+    let o = h.o, n = h.n;
+    h.lines = h.lines.map(([k, text]) => {
+      ord++;
+      const id = f.fid + '-' + String(ord).padStart(3, '0');
+      const kind = k === '+' ? 'add' : k === '-' ? 'del' : 'ctx';
+      const L = { id, kind, text, toks: tokenize(text) };
+      if (kind !== 'add') L.o = o++;
+      if (kind !== 'del') L.n = n++;
+      if (kind === 'add') add++; if (kind === 'del') del++;
+      return L;
+    });
+  });
+  f.add = add; f.del = del;
+  f.hunks.forEach(h => {
+    const L = h.lines; let i = 0;
+    while (i < L.length) {
+      if (L[i].kind === 'ctx') { i++; continue; }
+      const d = [], a = [];
+      while (i < L.length && L[i].kind === 'del') d.push(L[i++]);
+      while (i < L.length && L[i].kind === 'add') a.push(L[i++]);
+      for (let k = 0; k < Math.min(d.length, a.length); k++) {
+        const x = d[k].text, y = a[k].text; let p = 0, q = 0;
+        while (p < x.length && p < y.length && x[p] === y[p]) p++;
+        while (q < x.length - p && q < y.length - p && x[x.length - 1 - q] === y[y.length - 1 - q]) q++;
+        if (p === 0 && q === 0) continue;
+        while (p > 0 && /\w/.test(x[p - 1]) && /\w/.test(x[p] || '')) p--;
+        d[k].toks = paint(d[k].toks, [p, x.length - q], DEL_WORD);
+        a[k].toks = paint(a[k].toks, [p, y.length - q], ADD_WORD);
+      }
+    }
+  });
+});
+
+const SEV = {
+  high: { bg: 'var(--color-accent-900)', fg: 'var(--color-neutral-100)', bd: 'var(--color-accent-900)', w: 3 },
+  medium: { bg: 'var(--color-accent-100)', fg: 'var(--color-accent-800)', bd: 'var(--color-accent-300)', w: 2 },
+  low: { bg: 'transparent', fg: 'var(--color-neutral-700)', bd: 'var(--color-neutral-400)', w: 1 },
+  mine: { bg: 'transparent', fg: 'var(--color-neutral-800)', bd: 'var(--color-neutral-500)', w: 0 }
+};
+const RISK = { high: SEV.high, medium: SEV.medium, low: SEV.low };
+
+const AI_NOTES = [
+  { id: 'n2', src: 'ai', fid: 'F1', side: 'R', from: 44, to: 46, sev: 'high', cat: 'Security', conf: 0.8, w: 1.2,
+    title: 'Memo fallback can serve revoked sessions',
+    body: 'memo is filled on every refresh and never evicted (see the TODO on line 50). Once logout deletes the token from store, line 44 still returns the memoized session until the process restarts.',
+    refs: [{ id: 'F1-025', label: 'session.ts:50 TODO' }, { id: 'F2-003', label: 'memo.ts:3' }],
+    q: 'How are memo entries invalidated on logout or revocation?' },
+  { id: 'n1', src: 'ai', fid: 'F1', side: 'R', from: 41, to: 41, sev: 'high', cat: 'Behavior change', conf: 0.85, w: 1,
+    title: 'Return type now includes null; the auth middleware still expects AuthError',
+    body: 'C1 only handles AuthError and then reads s.user. An expired refresh now returns null, so s.user throws a TypeError and the request becomes a 500 instead of a 401. T1 still asserts the old throw.',
+    refs: [{ id: 'C1', label: 'middleware/auth.ts:85' }, { id: 'T1', label: 'session.test.ts:22' }],
+    q: 'Is middleware/auth.ts meant to handle null in this PR, or should refreshSession keep throwing AuthError?' },
+  { id: 'n3', src: 'ai', fid: 'F2', side: 'R', from: 3, to: 3, sev: 'medium', cat: 'Performance', conf: 0.7, w: 1,
+    title: 'Unbounded Map grows with every refresh token',
+    body: 'No size limit or TTL. Each distinct refresh token adds an entry for the life of the process, including tokens that were later revoked.',
+    refs: [], q: 'Should this be an LRU with the session TTL as max age?' }
+];
+
+class Component extends DCLogic {
+  state = {
+    view: 'unified', closed: {}, viewed: {}, ns: { n3: { seen: true, collapsed: true } },
+    mine: [{ id: 'm1', src: 'me', fid: 'F1', side: 'R', from: 49, to: 49, body: 'Dashboards still read auth.refresh.count. Check with infra before this ships, or emit both metric names for one release.' }],
+    composer: null, draft: '', terminal: null, promote: null, promoteBody: '', copied: null, cursor: -1, filter: 'all', current: null, showDesc: false, barH: 51
+  };
+  mainRef = React.createRef();
+  watchBar(tries = 0) {
+    const el = document.querySelector('[data-bar]');
+    if (!el) { if (tries < 40) this.barTimer = setTimeout(() => this.watchBar(tries + 1), 100); return; }
+    const measure = () => { const hgt = Math.round(el.getBoundingClientRect().height); if (hgt && hgt !== this.state.barH) this.setState({ barH: hgt }); };
+    measure();
+    if (window.ResizeObserver) { this.ro = new ResizeObserver(measure); this.ro.observe(el); }
+    else { this.onResize = measure; window.addEventListener('resize', measure); }
+  }
+  componentDidMount() {
+    this.onKey = e => {
+      if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || this.state.promote) return;
+      const cur = this.state.current && this.allNotes().find(n => n.id === this.state.current);
+      if (e.key === 'j') this.step(1);
+      else if (e.key === 'k') this.step(-1);
+      else if (e.key === 's' && cur) { const st = this.ns(cur.id); this.patchNote(cur.id, { seen: !st.seen, collapsed: !st.seen }); }
+      else if (e.key === 'd' && cur && cur.src === 'ai') { this.patchNote(cur.id, { dismissed: true }); this.step(1); }
+      else if (e.key === 'a' && cur) this.setState({ terminal: cur.id });
+    };
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); if (this.ro) this.ro.disconnect(); clearTimeout(this.barTimer); if (this.onResize) window.removeEventListener('resize', this.onResize); }
+  passes(n) { const f = this.state.filter; return f === 'all' || (f === 'high' && n.src === 'ai' && n.sev === 'high') || (f === 'mine' && n.src === 'me'); }
+  ordered() {
+    const ranked = AI_NOTES.slice().sort((a, b) => SEV[b.sev].w * b.conf * b.w - SEV[a.sev].w * a.conf * a.w);
+    return [...ranked, ...this.state.mine].filter(n => this.passes(n) && !this.ns(n.id).dismissed);
+  }
+  step(dir) {
+    const l = this.ordered(); if (!l.length) return;
+    const i = l.findIndex(n => n.id === this.state.current);
+    const next = l[i < 0 ? (dir > 0 ? 0 : l.length - 1) : (i + dir + l.length) % l.length];
+    this.jumpNote(next);
+  }
+
+  allNotes() { return [...AI_NOTES, ...this.state.mine]; }
+  ns(id) { return this.state.ns[id] || {}; }
+  patchNote(id, p) { this.setState(s => ({ ns: { ...s.ns, [id]: { ...(s.ns[id] || {}), ...p } } })); }
+  lineId(fid, side, num) {
+    const f = FILES.find(x => x.fid === fid);
+    for (const h of f.hunks) for (const l of h.lines) if ((side === 'R' ? l.n : l.o) === num && (side === 'R' ? l.kind !== 'del' : l.kind !== 'add')) return l.id;
+    return '';
+  }
+  scrollToId(id) {
+    const c = this.mainRef.current, el = document.getElementById(id);
+    if (!c || !el) return;
+    c.scrollTo({ top: el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop - (this.state.barH + 60), behavior: 'smooth' });
+  }
+  jumpNote(n) {
+    this.setState(s => ({ current: n.id, closed: { ...s.closed, [n.fid]: false }, viewed: { ...s.viewed, [n.fid]: false }, ns: { ...s.ns, [n.id]: { ...(s.ns[n.id] || {}), collapsed: false } } }),
+      () => setTimeout(() => this.scrollToId('note-' + n.id), 30));
+  }
+
+  noteView(n) {
+    const st = this.ns(n.id), isAI = n.src === 'ai', f = FILES.find(x => x.fid === n.fid);
+    const sev = SEV[isAI ? n.sev : 'mine'];
+    const a = this.lineId(n.fid, n.side, n.from), b = this.lineId(n.fid, n.side, n.to);
+    const range = n.from === n.to ? n.from : n.from + '–' + n.to;
+    const isBar = !!(st.dismissed || st.collapsed);
+    return {
+      domId: 'note-' + n.id, isOpen: !isBar, isBar,
+      who: isAI ? 'PR Lens' : 'You · private',
+      sev: isAI ? n.sev : 'private', sevBg: sev.bg, sevFg: sev.fg, sevBd: sev.bd,
+      cat: n.cat || '', hasCat: !!n.cat, title: n.title || '', hasTitle: !!n.title, body: n.body,
+      refs: n.refs || [], hasRefs: !!(n.refs && n.refs.length), q: n.q || '', hasQ: !!n.q,
+      loc: (a === b ? a : a + '–' + b) + ' · line ' + range,
+      seen: !!st.seen, promoted: !!st.promoted,
+      frame: this.state.current === n.id ? 'var(--color-accent)' : isAI ? 'var(--color-accent-400)' : 'var(--color-neutral-400)',
+      barText: st.dismissed ? 'Dismissed: ' + (n.title || n.body) : (n.title || n.body),
+      barAction: st.dismissed ? 'Restore' : 'Expand',
+      strike: st.dismissed ? 'line-through' : 'none',
+      barClick: () => this.patchNote(n.id, st.dismissed ? { dismissed: false } : { collapsed: false }),
+      collapse: () => this.patchNote(n.id, { collapsed: true }),
+      seenToggle: () => this.patchNote(n.id, { seen: !st.seen, collapsed: !st.seen }),
+      seenLabel: st.seen ? 'Mark unseen' : 'Mark seen',
+      dismiss: () => isAI ? this.patchNote(n.id, { dismissed: true }) : this.setState(s => ({ mine: s.mine.filter(m => m.id !== n.id) })),
+      dismissLabel: isAI ? 'Dismiss' : 'Delete',
+      copyLabel: this.state.copied === n.id ? 'Copied' : 'Copy',
+      copyQ: () => { try { navigator.clipboard.writeText(n.q); } catch (e) {} this.setState({ copied: n.id }); setTimeout(() => this.setState({ copied: null }), 1400); },
+      ask: () => this.setState({ terminal: n.id, current: n.id }),
+      promote: () => this.setState({ promote: n.id, promoteBody: (n.title ? '**' + n.title + '**\n\n' : '') + n.body + (n.q ? '\n\n' + n.q : '') })
+    };
+  }
+
+  buildRows(f, notes) {
+    const split = this.state.view === 'split', comp = this.state.composer;
+    const hl = { L: new Set(), R: new Set() };
+    notes.forEach(n => { const st = this.ns(n.id); if (!st.dismissed && !st.collapsed) for (let i = n.from; i <= n.to; i++) hl[n.side].add(i); });
+    const after = (side, num) => {
+      const out = [];
+      notes.filter(n => n.side === side && n.to === num).forEach(n => out.push({ key: 'note' + n.id, isNote: true, n: this.noteView(n) }));
+      if (comp && comp.fid === f.fid && comp.side === side && comp.line === num) out.push({ key: 'comp', isComposer: true });
+      return out;
+    };
+    const addFn = (side, num) => () => this.setState({ composer: { fid: f.fid, side, line: num }, draft: '' });
+    const cell = (l, side) => {
+      if (!l) return { no: '', mark: '', toks: [], bg: EMPTY, gbg: EMPTY, numC: NUM, markC: NUM };
+      const num = side === 'L' ? l.o : l.n, hit = hl[side].has(num);
+      const bg = l.kind === 'add' ? ADD_BG : l.kind === 'del' ? DEL_BG : 'transparent';
+      const gbg = hit ? HL : l.kind === 'add' ? ADD_GUT : l.kind === 'del' ? DEL_GUT : CTX_GUT;
+      return { no: num, mark: l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : '', toks: l.toks, bg, gbg,
+        numC: hit ? 'var(--color-accent-900)' : l.kind === 'ctx' ? NUM : 'var(--color-neutral-700)', markC: l.kind === 'add' ? ADD_MK : DEL_MK };
+    };
+    const rows = [];
+    f.hunks.forEach((h, hi) => {
+      rows.push({ key: 'h' + hi, isHunk: true, text: h.header });
+      if (!split) {
+        h.lines.forEach(l => {
+          const side = l.kind === 'del' ? 'L' : 'R', num = side === 'L' ? l.o : l.n;
+          const c = cell(l, side);
+          const hit = (l.o != null && hl.L.has(l.o) && l.kind === 'del') || (l.n != null && hl.R.has(l.n));
+          rows.push({ key: l.id, isLine: true, o: l.o ?? '', n: l.n ?? '', mark: c.mark, markC: c.markC, toks: l.toks, bg: c.bg,
+            gbg: hit ? HL : c.gbg, numC: hit ? 'var(--color-accent-900)' : c.numC, add: addFn(side, num) });
+          rows.push(...after(side, num));
+        });
+      } else {
+        const L = h.lines; let i = 0; const pairs = [];
+        while (i < L.length) {
+          if (L[i].kind === 'ctx') { pairs.push([L[i], L[i]]); i++; continue; }
+          const d = [], a = [];
+          while (i < L.length && L[i].kind === 'del') d.push(L[i++]);
+          while (i < L.length && L[i].kind === 'add') a.push(L[i++]);
+          for (let k = 0; k < Math.max(d.length, a.length); k++) pairs.push([d[k] || null, a[k] || null]);
+        }
+        pairs.forEach(([l, r], pi) => {
+          rows.push({ key: 'p' + hi + '-' + pi, isPair: true, l: cell(l, 'L'), r: cell(r, 'R'), add: r ? addFn('R', r.n) : addFn('L', l.o) });
+          if (l && l.kind === 'del') rows.push(...after('L', l.o));
+          if (r) rows.push(...after('R', r.n));
+        });
+      }
+    });
+    return rows;
+  }
+
+  renderVals() {
+    const s = this.state, all = this.allNotes();
+    const order = ['F2', 'F1'];
+    const files = order.map((fid, idx) => {
+      const f = FILES.find(x => x.fid === fid), notes = all.filter(n => n.fid === fid && this.passes(n));
+      const r = RISK[f.risk], open = !s.closed[fid] && !s.viewed[fid];
+      const total = f.add + f.del, ga = Math.round(5 * f.add / total);
+      const ai = notes.filter(n => n.src === 'ai').length, me = notes.length - ai;
+      return {
+        fid, order: idx + 1, domId: 'file-' + fid, name: f.path.split('/').pop(), dir: f.path.slice(0, f.path.lastIndexOf('/') + 1),
+        why: f.why, sideMeta: '+' + f.add + ' −' + f.del + ' · ' + ai + ' AI' + (me ? ' · ' + me + ' mine' : ''),
+        status: f.status, add: f.add, del: f.del, risk: f.risk, riskLabel: f.risk + ' risk', riskBg: r.bg, riskFg: r.fg, riskBd: r.bd,
+        blocks: [0, 1, 2, 3, 4].map(i => ({ c: i < ga ? ADD_MK : i < 5 && f.del ? DEL_MK : 'var(--color-neutral-300)' })),
+        open, chev: open ? '0deg' : '-90deg', viewed: !!s.viewed[fid], viewedBg: s.viewed[fid] ? 'var(--color-accent-100)' : 'transparent',
+        toggle: () => this.setState(st => ({ closed: { ...st.closed, [fid]: open }, viewed: { ...st.viewed, [fid]: false } })),
+        toggleViewed: () => this.setState(st => ({ viewed: { ...st.viewed, [fid]: !st.viewed[fid] } })),
+        jump: () => this.setState(st => ({ closed: { ...st.closed, [fid]: false } }), () => setTimeout(() => this.scrollToId('file-' + fid), 30)),
+        rows: open ? this.buildRows(f, notes) : []
+      };
+    });
+
+    const rankedNotes = AI_NOTES.slice().sort((a, b) => SEV[b.sev].w * b.conf * b.w - SEV[a.sev].w * a.conf * a.w);
+    const ranked = [...rankedNotes, ...s.mine].map((n, i) => {
+      const st = this.ns(n.id), sev = SEV[n.src === 'ai' ? n.sev : 'mine'];
+      const f = FILES.find(x => x.fid === n.fid);
+      return { rank: n.src === 'ai' ? i + 1 : '·', title: n.title || n.body, meta: f.path.split('/').pop() + ':' + n.from + (n.src === 'ai' ? '' : ' · private'),
+        dot: sev.bg === 'transparent' ? 'transparent' : sev.bg, dotBd: sev.bd, opacity: st.seen || st.dismissed ? 0.5 : 1,
+        strike: st.dismissed ? 'line-through' : 'none', jump: () => this.jumpNote(n) };
+    });
+    const openList = [...rankedNotes, ...s.mine].filter(n => { const st = this.ns(n.id); return !st.dismissed && !st.seen; });
+
+    const tn = s.terminal && all.find(n => n.id === s.terminal);
+    const termLines = tn ? [
+      { t: '~/.pr-lens/worktrees/acme__api__pr812__9bd04e1  (detached HEAD 9bd04e1)', c: 'var(--color-accent-300)' },
+      { t: '$ claude --permission-mode plan --setting-sources user --strict-mcp-config', c: 'var(--color-neutral-300)' },
+      { t: '', c: 'inherit' },
+      { t: '> I am reviewing acme/api#812 "Cache refreshed sessions in memory" at 9bd04e1.', c: 'var(--color-neutral-100)' },
+      { t: '  PR Lens flagged ' + (tn.src === 'ai' ? '[' + tn.sev + ' · ' + tn.cat.toLowerCase() + '] ' : '[private] ') + (tn.title || tn.body), c: 'var(--color-neutral-100)' },
+      { t: '  at ' + FILES.find(x => x.fid === tn.fid).path + ':' + (tn.from === tn.to ? tn.from : tn.from + '-' + tn.to) + '. Full description and diff: ~/.pr-lens/sessions/01J9X/pr.md', c: 'var(--color-neutral-100)' },
+      { t: '  Help me check whether this is a real problem. Do not modify files.', c: 'var(--color-neutral-100)' },
+      { t: '', c: 'inherit' },
+      { t: '● Searching for memo usages and logout handlers…', c: 'var(--color-accent-300)' },
+      { t: '  Grep "memo\\." in src/  →  3 matches', c: 'var(--color-neutral-400)' },
+      { t: '  Read src/auth/logout.ts', c: 'var(--color-neutral-400)' },
+      { t: '', c: 'inherit' },
+      { t: 'logout.ts:14 calls store.delete(token) but never touches memo. After logout, refreshSession', c: 'var(--color-neutral-100)' },
+      { t: 'falls through to memo.get(token) and returns the old session. The note holds.', c: 'var(--color-neutral-100)' }
+    ] : [];
+
+    const pn = s.promote && all.find(n => n.id === s.promote);
+    const comp = s.composer;
+    return {
+      mainRef: this.mainRef, barH: s.barH + 'px', files, ranked, openCount: openList.length,
+      stats: { high: AI_NOTES.filter(n => n.sev === 'high').length, medium: AI_NOTES.filter(n => n.sev === 'medium').length, mine: s.mine.length, seen: all.filter(n => this.ns(n.id).seen).length },
+      isUnified: s.view === 'unified', isSplit: s.view === 'split',
+      setUnified: () => this.setState({ view: 'unified' }), setSplit: () => this.setState({ view: 'split' }),
+      hunkCols: s.view === 'split' ? '76px minmax(0,1fr)' : '128px minmax(0,1fr)',
+      noteIndent: s.view === 'split' ? '76px' : '128px',
+      nextNote: () => this.step(1),
+      viewedCount: Object.values(s.viewed).filter(Boolean).length, viewedPct: Math.round(50 * Object.values(s.viewed).filter(Boolean).length) + '%',
+      filters: [['all', 'All', all.length], ['high', 'High', AI_NOTES.filter(n => n.sev === 'high').length], ['mine', 'Mine', s.mine.length]].map(([k, label, count]) => ({ label, count, on: s.filter === k, pick: () => this.setState({ filter: k }) })),
+      showDesc: s.showDesc, descLabel: s.showDesc ? 'Hide description and linked issue' : 'Show description and linked issue', descChev: s.showDesc ? '90deg' : '0deg',
+      toggleDesc: () => this.setState({ showDesc: !s.showDesc }),
+      composerLoc: comp ? FILES.find(x => x.fid === comp.fid).path + ':' + comp.line + ' · ' + this.lineId(comp.fid, comp.side, comp.line) : '',
+      draft: s.draft, setDraft: e => this.setState({ draft: e.target.value }),
+      cancelComposer: () => this.setState({ composer: null, draft: '' }),
+      saveComposer: () => { if (!s.draft.trim() || !comp) return; this.setState(st => ({ mine: [...st.mine, { id: 'm' + Date.now(), src: 'me', fid: comp.fid, side: comp.side, from: comp.line, to: comp.line, body: st.draft.trim() }], composer: null, draft: '' })); },
+      hasTerminal: !!tn, termLines, closeTerminal: () => this.setState({ terminal: null }),
+      hasPromote: !!pn, promoteBody: s.promoteBody, setPromoteBody: e => this.setState({ promoteBody: e.target.value }),
+      promoteLoc: pn ? FILES.find(x => x.fid === pn.fid).path + ':' + (pn.from === pn.to ? pn.from : pn.from + '–' + pn.to) + ' · RIGHT' : '',
+      closePromote: () => this.setState({ promote: null }),
+      confirmPromote: () => { const id = s.promote; this.setState({ promote: null }); this.patchNote(id, { promoted: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
