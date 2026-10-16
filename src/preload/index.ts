@@ -19,7 +19,11 @@ const api = {
     update: call('settings:update'),
     setOAuthToken: call('settings:setOAuthToken'),
   },
-  github: { openPr: call('github:openPr') },
+  github: {
+    openPr: call('github:openPr'),
+    openCompare: call('github:openCompare'),
+    searchRefs: call('github:searchRefs'),
+  },
   review: {
     start: call('review:start'),
     cancel: call('review:cancel'),

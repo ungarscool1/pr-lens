@@ -3,21 +3,35 @@ import type { DiffModel } from './diff';
 import type { Health } from './health';
 import { CreateNoteInput, DeleteNoteInput, PatchNoteStateInput } from './notes';
 import type { NotesFile, PrivateNote } from './notes';
-import { PrInput, PrRef, TargetKey } from './pr';
-import type { PrMeta, Target } from './pr';
-import type { Analysis, CacheInfo, Estimate } from './review';
+import { PrInput } from './pr';
+import type { PrMeta } from './pr';
+import type { Analysis, CacheInfo, Estimate, ReleaseSummary } from './review';
+import { DiffMode, GitRefName, RepoRef, Subject, TargetKey } from './subject';
+import type { CompareMeta, RefSuggestion, Target } from './subject';
 import { OAuthTokenInput, SettingsPatch } from './settings';
 import type { SettingsView } from './settings';
 
-export interface OpenPrResult {
+export type Header = { kind: 'pr'; meta: PrMeta } | { kind: 'compare'; meta: CompareMeta };
+
+/** A PR or compare range, loaded and ready to review. */
+export interface OpenResult {
   target: Target;
-  meta: PrMeta;
+  header: Header;
   diff: DiffModel;
   estimate: Estimate;
   /** A finished analysis for this exact head SHA, from the on-disk cache, if one exists. */
   analysis: Analysis | null;
   cache: CacheInfo | null;
+  /** Compare ranges only: a cached release summary. */
+  release: ReleaseSummary | null;
 }
+
+export const CompareInput = RepoRef.extend({
+  base: GitRefName,
+  head: GitRefName,
+  mode: DiffMode,
+}).strict();
+export type CompareInput = z.infer<typeof CompareInput>;
 
 /**
  * Every invoke channel: its payload schema (validated in main) and its result type.
@@ -30,17 +44,33 @@ export const contract = {
   'settings:setOAuthToken': { input: OAuthTokenInput, output: z.custom<SettingsView>() },
   'github:openPr': {
     input: z.object({ input: PrInput }).strict(),
-    output: z.custom<OpenPrResult>(),
+    output: z.custom<OpenResult>(),
+  },
+  'github:openCompare': { input: CompareInput, output: z.custom<OpenResult>() },
+  'github:searchRefs': {
+    input: RepoRef.extend({
+      query: z
+        .string()
+        .max(100)
+        .regex(/^[A-Za-z0-9._/+@-]*$/),
+    }).strict(),
+    output: z.custom<{ defaultBranch: string | null; refs: RefSuggestion[] }>(),
   },
   'review:start': {
-    input: z.object({ targetKey: TargetKey, force: z.boolean() }).strict(),
+    input: z
+      .object({
+        targetKey: TargetKey,
+        force: z.boolean(),
+        kind: z.enum(['review', 'release']).default('review'),
+      })
+      .strict(),
     output: z.custom<{ jobId: string }>(),
   },
   'review:cancel': {
     input: z.object({ jobId: z.string().uuid() }).strict(),
     output: z.custom<void>(),
   },
-  'notes:list': { input: z.object({ ref: PrRef }).strict(), output: z.custom<NotesFile>() },
+  'notes:list': { input: z.object({ subject: Subject }).strict(), output: z.custom<NotesFile>() },
   'notes:create': { input: CreateNoteInput, output: z.custom<PrivateNote>() },
   'notes:delete': { input: DeleteNoteInput, output: z.custom<void>() },
   'notes:patchState': { input: PatchNoteStateInput, output: z.custom<void>() },

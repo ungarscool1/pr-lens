@@ -7,6 +7,7 @@ import { REVIEW_EVENT_CHANNEL } from '../shared/ipc';
 import type { ReviewEvent } from '../shared/review';
 import { execFileRunner } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
+import { createGit } from './git/git';
 import { createGhClient } from './github/gh';
 import { registerIpc } from './ipc/register';
 import { createNotes } from './notes/notes';
@@ -46,6 +47,7 @@ async function createServices(): Promise<void> {
   const cache = createAnalysisCache(store);
   const review = createReviewService({
     github,
+    git: createGit(execFileRunner, toolchain, join(data, 'git')),
     claude,
     settings,
     sandboxDir,

@@ -53,17 +53,3 @@ export interface PrMeta {
   commitCount: number;
   linkedIssues: LinkedIssue[];
 }
-
-/** One PR at one head SHA. The key is what review jobs and caches refer to. */
-export interface Target {
-  key: string;
-  ref: PrRef;
-  headSha: string;
-}
-
-export const targetKey = (ref: PrRef, headSha: string): string => `${formatPrRef(ref)}@${headSha}`;
-
-export const TargetKey = z
-  .string()
-  .max(400)
-  .regex(/^[^/\s]+\/[^/\s#]+#\d+@[0-9a-f]{7,64}$/);

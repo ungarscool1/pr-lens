@@ -1,6 +1,6 @@
 import { AppError } from '../../shared/errors';
 import type { DiffModel } from '../../shared/diff';
-import type { PrMeta, Target } from '../../shared/pr';
+import type { Target } from '../../shared/subject';
 import { PROMPT_VERSION } from '../../shared/review';
 import type { Analysis, DroppedNote, Usage } from '../../shared/review';
 import type { Settings } from '../../shared/settings';
@@ -9,13 +9,14 @@ import { applyMerge, buildMergePrompt, fallbackMerge, MERGE_SYSTEM_PROMPT } from
 import type { Candidate, ChunkResult } from './merge';
 import { planReview } from './plan';
 import { SYSTEM_PROMPT } from './prompt';
+import type { PromptContext } from './prompt';
 import { rankNotes } from './rank';
 import { completeReadingOrder, validateFiles, validateNotes, visibleAll } from './validate';
 import type { ValidNote } from './validate';
 
 export interface PipelineInput {
   target: Target;
-  meta: PrMeta;
+  context: PromptContext;
   diff: DiffModel;
   settings: Pick<Settings, 'maxNotes' | 'model' | 'reviewTimeoutSec'>;
   sandboxDir: string;
@@ -44,8 +45,8 @@ export async function runReviewPipeline(
   claude: ClaudeClient,
   input: PipelineInput,
 ): Promise<Analysis> {
-  const { target, meta, diff, settings, signal } = input;
-  const plan = planReview(target.ref, meta, diff, settings.maxNotes, input.budget);
+  const { target, context, diff, settings, signal } = input;
+  const plan = planReview(context, diff, settings.maxNotes, input.budget);
   const total = plan.prompts.length;
   const call = <T>(fn: () => Promise<T>): Promise<T> =>
     input.limit(() => (signal.aborted ? Promise.reject(new AppError('CANCELLED')) : fn()));
@@ -102,14 +103,7 @@ export async function runReviewPipeline(
   if (total > 1 && candidates.length > 0) {
     input.onProgress('Merging chunk results…');
     try {
-      const prompt = buildMergePrompt(
-        target.ref,
-        meta,
-        diff,
-        candidates,
-        chunkResults,
-        settings.maxNotes,
-      );
+      const prompt = buildMergePrompt(context, diff, candidates, chunkResults, settings.maxNotes);
       const r = await call(() =>
         claude.merge({ ...base, prompt, systemPrompt: MERGE_SYSTEM_PROMPT }),
       );

@@ -70,7 +70,7 @@ describe('claudeEnv', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-should-not-leak');
     vi.stubEnv('GITHUB_TOKEN', 'ghp_x');
     vi.stubEnv('CLAUDE_CODE_USE_BEDROCK', '1');
-    const env = claudeEnv({ gh: null, claude: '/c', path: '/usr/bin' }, 'oauth-token');
+    const env = claudeEnv({ gh: null, claude: '/c', git: null, path: '/usr/bin' }, 'oauth-token');
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.GITHUB_TOKEN).toBeUndefined();
     expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined();

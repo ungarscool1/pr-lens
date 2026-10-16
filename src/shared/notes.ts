@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PrRef } from './pr';
+import { Subject } from './subject';
 
 export const NoteState = z
   .object({
@@ -35,10 +35,12 @@ export const NotesFile = z.object({
 export type NotesFile = z.infer<typeof NotesFile>;
 
 export const CreateNoteInput = z
-  .object({ ref: PrRef })
+  .object({ subject: Subject })
   .extend(PrivateNote.omit({ id: true, source: true, createdAt: true }).shape)
   .strict();
 
-export const DeleteNoteInput = z.object({ ref: PrRef, id: NOTE_ID }).strict();
+export const DeleteNoteInput = z.object({ subject: Subject, id: NOTE_ID }).strict();
 
-export const PatchNoteStateInput = z.object({ ref: PrRef, id: NOTE_ID, patch: NoteState }).strict();
+export const PatchNoteStateInput = z
+  .object({ subject: Subject, id: NOTE_ID, patch: NoteState })
+  .strict();

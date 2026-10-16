@@ -1,10 +1,9 @@
 import { AppError } from '../../shared/errors';
 import type { DiffModel } from '../../shared/diff';
-import type { PrMeta, PrRef } from '../../shared/pr';
 import type { SecretFinding } from '../../shared/review';
 import { planChunks } from './chunker';
 import { buildReviewPrompt } from './prompt';
-import type { BuiltPrompt } from './prompt';
+import type { BuiltPrompt, PromptContext } from './prompt';
 
 /** Input-token budget for one chunk's whole prompt (header, manifest, diff, task). */
 export const CHUNK_BUDGET_TOKENS = 90_000;
@@ -21,13 +20,12 @@ export interface ReviewPlan {
 
 /** One prompt per chunk. A PR that fits one budget is sent whole, as a single pass. */
 export function planReview(
-  ref: PrRef,
-  meta: PrMeta,
+  ctx: PromptContext,
   diff: DiffModel,
   maxNotes: number,
   budget = CHUNK_BUDGET_TOKENS,
 ): ReviewPlan {
-  const whole = buildReviewPrompt(ref, meta, diff, maxNotes);
+  const whole = buildReviewPrompt(ctx, diff, maxNotes);
   if (whole.estimatedTokens <= budget) {
     return {
       prompts: [whole],
@@ -37,7 +35,7 @@ export function planReview(
   }
 
   // What every chunk repeats: PR header, manifest, task.
-  const overhead = buildReviewPrompt(ref, meta, diff, maxNotes, {
+  const overhead = buildReviewPrompt(ctx, diff, maxNotes, {
     index: 0,
     total: 2,
     items: [],
@@ -57,7 +55,7 @@ export function planReview(
     );
   }
   const prompts = chunks.map((c, index) =>
-    buildReviewPrompt(ref, meta, diff, maxNotes, { index, total: chunks.length, items: c.items }),
+    buildReviewPrompt(ctx, diff, maxNotes, { index, total: chunks.length, items: c.items }),
   );
   return {
     prompts,

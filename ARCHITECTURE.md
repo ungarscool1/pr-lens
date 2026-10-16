@@ -39,6 +39,30 @@ renderer can match events that arrive before `review:start` has replied.
   override either binary.
 - `src/main/exec/toolchain.ts` builds the child environments from allow-lists. `claude` gets
   `PATH`, `HOME`, locale vars and, if set, `CLAUDE_CODE_OAUTH_TOKEN`; nothing else.
+- `src/main/git/git.ts` is only used for direct (two-dot) compares of diverged refs: GitHub's
+  compare API has no two-dot diff. It keeps a bare cache repo per GitHub repo, fetches just the
+  two SHAs (`--depth=1 --filter=blob:none`), and `git diff`s them; git fetches the blobs it
+  needs on demand. Credentials come from `gh auth git-credential`, never a prompt
+  (`GIT_TERMINAL_PROMPT=0`).
+
+## Subjects: PRs and compare ranges
+
+`src/shared/subject.ts`. Everything that is reviewed is a `Subject`: a PR (`owner/repo#n`) or a
+compare range pinned to SHAs (`owner/repo`, base SHA, head SHA, mode). Notes, cache files and
+target keys all derive from it (`subjectSlug`, `targetKeyOf`). Refs typed by the user are
+validated by `GitRefName` (no `..`, `@{`, leading `-`, spaces) before they reach a `gh api`
+path, then resolved to SHAs with `gh api repos/…/commits/<ref>`.
+
+- Three-dot diffs and compare metadata (merge base, ahead/behind, up to 250 commits) come from
+  `gh api …/compare/<base>...<head>` with a constant `--jq` filter.
+- A two-dot range whose base is an ancestor of head is the same diff, so it uses the
+  three-dot path and shares the three-dot subject (one review, one set of notes); the UI still
+  labels it as direct.
+- The prompt header is a `PromptContext`: `<pr …>` with description and linked issues, or
+  `<compare …>` with the diff mode and commit subjects.
+- Release summaries (`review/release.ts`, `release.v1`) run as a job like reviews, over commit
+  subjects, the file list and the cached review's notes; `risky` may only cite real note IDs.
+  They are cached next to the analysis (`<headSha>.release.json`).
 
 ## Review pipeline (`src/main/review`)
 
@@ -80,23 +104,25 @@ renderer can match events that arrive before `review:start` has replied.
 `src/main/store/json-store.ts`: atomic JSON files (temp + rename, mode 0600, writes serialized
 per file) under `app.getPath('userData')`, each read back through a zod schema.
 
-- **Analyses** (`src/main/review/cache.ts`): one file per (repo, PR, head SHA) at
-  `analyses/<owner>__<repo>__<n>/<headSha>.json`, holding `{ version, settingsKey, analysis }`.
+- **Analyses** (`src/main/review/cache.ts`): one file per (subject, head SHA) at
+  `analyses/<subject slug>/<headSha>.json` (a PR slug is `<owner>__<repo>__<n>`), holding `{ version, settingsKey, analysis }`.
   Opening a PR or starting a review without "Re-run" serves the file instead of calling
   `claude`; "Re-run" always runs and overwrites it. `settingsKey` hashes the prompt versions,
   model, note cap and noise globs: a hit made with other settings is still shown, flagged
   stale, so a paid-for review is never discarded silently. Unreadable or older-version files
   are a miss (logged by error name only, never content). A new push means a new head SHA and
   so a fresh review. There is no pruning yet.
-- **Private notes and note state** live in `notes/<owner>__<repo>__<n>.json`, keyed by PR so
-  they survive new pushes. AI note IDs are a hash of path, category and anchor text, so
+- **Private notes and note state** live in `notes/<subject slug>.json`: per PR, so they
+  survive new pushes, and per SHA range for a compare. AI note IDs are a hash of path, category and anchor text, so
   seen/dismissed state carries over when a re-run finds the same thing.
 - **Settings** in `settings.json`; the optional Claude OAuth token in `claude-oauth.bin`,
   encrypted with `safeStorage`.
 
 ## Renderer
 
-Feature folders under `src/renderer/src/features` (`shell`, `review`, `settings`). The design
+Feature folders under `src/renderer/src/features` (`shell`, `review`, `compare`, `settings`).
+The review page serves both PRs and compares; only the header (`PrHeader` / `CompareHeader`)
+differs. The design
 system stylesheet is copied verbatim into `styles/ds.css`; `styles/app.css` adds the mono font,
 diff and severity tokens, and a dark theme derived from the system ramps. `ds/` holds thin
 React wrappers over the design-system classes. `features/review/model.ts` holds the pure view
@@ -106,6 +132,5 @@ logic (note ordering, filters, row building, intra-line highlights) and is unit-
 
 | Phase | Adds                                                                                  |
 | ----- | ------------------------------------------------------------------------------------- |
-| 4     | Compare view (branch / tag / SHA, two-dot vs three-dot), release summary.             |
 | 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal. |
 | 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.         |

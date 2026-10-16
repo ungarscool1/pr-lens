@@ -2,7 +2,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parsePrInput, targetKey } from '../../shared/pr';
+import { parsePrInput } from '../../shared/pr';
+import { targetKeyOf } from '../../shared/subject';
 import { DEFAULT_NOISE_GLOBS } from '../../shared/settings';
 import { buildDiffModel } from '../diff/parse';
 import { execFileRunner } from '../exec/exec';
@@ -11,6 +12,7 @@ import { createGhClient } from '../github/gh';
 import { createClaudeClient } from './claude';
 import { createLimiter } from './limiter';
 import { runReviewPipeline } from './pipeline';
+import { prContext } from './prompt';
 
 /**
  * Live smoke test against real gh + claude, no window. Costs real tokens, so it only runs on
@@ -30,8 +32,12 @@ describe.skipIf(!process.env.PR_LENS_LIVE)('live review pipeline', () => {
       const progress: string[] = [];
 
       const a = await runReviewPipeline(claude, {
-        target: { key: targetKey(ref, meta.headSha), ref, headSha: meta.headSha },
-        meta,
+        target: {
+          key: targetKeyOf({ kind: 'pr', ref }, meta.headSha),
+          subject: { kind: 'pr', ref },
+          headSha: meta.headSha,
+        },
+        context: prContext(ref, meta),
         diff,
         settings: { maxNotes: 8, model: null, reviewTimeoutSec: 600 },
         sandboxDir: await mkdtemp(join(tmpdir(), 'pr-lens-live-')),

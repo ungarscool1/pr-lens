@@ -20,7 +20,7 @@ const envelope = (over: object) =>
   });
 
 const toolchain: ToolchainService = {
-  get: async () => ({ gh: null, claude: '/bin/claude', path: '/usr/bin' }),
+  get: async () => ({ gh: null, claude: '/bin/claude', git: null, path: '/usr/bin' }),
   reset: () => undefined,
 };
 
@@ -44,6 +44,13 @@ describe('parseEnvelope', () => {
       'CLAUDE_NOT_LOGGED_IN',
     ],
     [envelope({ is_error: true, result: 'Overloaded' }), 'MODEL_ERROR'],
+    [
+      envelope({
+        is_error: true,
+        result: "You've hit your session limit · resets 8pm (Europe/Paris)",
+      }),
+      'CLAUDE_LIMIT',
+    ],
   ])('maps %s to %s', (stdout, code) =>
     expect(() => parseEnvelope(stdout, ModelOutput)).toThrow(expect.objectContaining({ code })),
   );

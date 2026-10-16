@@ -6,6 +6,8 @@ import { findBin, loginShellPath, searchPath } from './resolve-bin';
 export interface Toolchain {
   gh: string | null;
   claude: string | null;
+  /** Only needed for direct (two-dot) compare diffs. */
+  git: string | null;
   /** PATH handed to children, so `claude` and `gh` can find git, node, etc. */
   path: string;
 }
@@ -24,11 +26,12 @@ export function createToolchain(
   const resolve = async (): Promise<Toolchain> => {
     const dirs = searchPath(await loginShellPath(exec));
     const { ghPath, claudePath } = overrides();
-    const [gh, claude] = await Promise.all([
+    const [gh, claude, git] = await Promise.all([
       findBin('gh', dirs, ghPath),
       findBin('claude', dirs, claudePath),
+      findBin('git', dirs, null),
     ]);
-    return { gh, claude, path: dirs.join(':') };
+    return { gh, claude, git, path: dirs.join(':') };
   };
   return {
     get: () => (cached ??= resolve()),
@@ -65,6 +68,11 @@ export function ghEnv(tc: Toolchain): NodeJS.ProcessEnv {
   env.GH_PROMPT_DISABLED = '1';
   env.NO_COLOR = '1';
   return env;
+}
+
+/** git for the two-dot fetch: never prompt; gh (as credential helper) needs its own env too. */
+export function gitEnv(tc: Toolchain): NodeJS.ProcessEnv {
+  return { ...ghEnv(tc), GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' };
 }
 
 /**

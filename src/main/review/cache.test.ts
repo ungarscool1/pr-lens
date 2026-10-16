@@ -13,7 +13,7 @@ import { createAnalysisCache, settingsKey } from './cache';
 import type { ClaudeClient } from './claude';
 import { createReviewService } from './service';
 
-const ref = { owner: 'acme', repo: 'api', number: 812 };
+const ref = { kind: 'pr' as const, ref: { owner: 'acme', repo: 'api', number: 812 } };
 const HEAD = '9bd04e1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const settings = Settings.parse({});
 
@@ -57,7 +57,9 @@ describe('createAnalysisCache', () => {
     await cache.put(ref, analysis(), settings);
     expect(await cache.get(ref, HEAD, settings)).toEqual({ analysis: analysis(), stale: false });
     expect(await cache.get(ref, 'b'.repeat(40), settings)).toBeNull();
-    expect(await cache.get({ ...ref, number: 813 }, HEAD, settings)).toBeNull();
+    expect(
+      await cache.get({ kind: 'pr', ref: { ...ref.ref, number: 813 } }, HEAD, settings),
+    ).toBeNull();
     const raw = JSON.parse(
       await readFile(join(dir, `analyses/acme__api__812/${HEAD}.json`), 'utf8'),
     );
@@ -110,6 +112,11 @@ describe('review service with the cache', () => {
     health: () => Promise.reject(new Error('unused')),
     prMeta: async () => meta,
     prDiff: async () => SAMPLE_DIFF,
+    resolveCommit: () => Promise.reject(new Error('unused')),
+    compare: () => Promise.reject(new Error('unused')),
+    compareDiff: () => Promise.reject(new Error('unused')),
+    tagsAmong: () => Promise.reject(new Error('unused')),
+    searchRefs: () => Promise.reject(new Error('unused')),
   };
   const output: ModelOutput = { summary: 'reviewed', files: [], reading_order: [], notes: [] };
   const makeClaude = () => {
@@ -118,6 +125,7 @@ describe('review service with the cache', () => {
       health: () => Promise.reject(new Error('unused')),
       review,
       merge: () => Promise.reject(new Error('unused')),
+      release: () => Promise.reject(new Error('unused')),
     };
     return { client, review };
   };
@@ -136,6 +144,7 @@ describe('review service with the cache', () => {
     const events: ReviewEvent[] = [];
     const svc = createReviewService({
       github,
+      git: { directDiff: () => Promise.reject(new Error('unused')) },
       claude,
       settings: settingsService(s),
       sandboxDir: '/tmp',
@@ -158,7 +167,7 @@ describe('review service with the cache', () => {
     const a = service(store, first.client);
     const opened = await a.svc.openPr('acme/api#812');
     expect(opened.analysis).toBeNull();
-    a.svc.start(opened.target.key, false);
+    a.svc.start(opened.target.key, false, 'review');
     expect(await a.done()).toMatchObject({ type: 'done', cache: { from: 'run', saved: true } });
 
     // A new service instance is what an app restart looks like.
@@ -167,11 +176,11 @@ describe('review service with the cache', () => {
     const reopened = await b.svc.openPr('acme/api#812');
     expect(reopened.analysis?.summary).toBe('reviewed');
     expect(reopened.cache).toEqual({ from: 'cache', stale: false, saved: true });
-    b.svc.start(reopened.target.key, false);
+    b.svc.start(reopened.target.key, false, 'review');
     expect(await b.done()).toMatchObject({ type: 'done', cache: { from: 'cache' } });
     expect(second.review).not.toHaveBeenCalled();
 
-    b.svc.start(reopened.target.key, true);
+    b.svc.start(reopened.target.key, true, 'review');
     expect(await b.done()).toMatchObject({ type: 'done', cache: { from: 'run' } });
     expect(second.review).toHaveBeenCalledTimes(1);
   });
@@ -180,7 +189,7 @@ describe('review service with the cache', () => {
     const { store } = await tempStore();
     const a = service(store, makeClaude().client);
     const opened = await a.svc.openPr('acme/api#812');
-    a.svc.start(opened.target.key, false);
+    a.svc.start(opened.target.key, false, 'review');
     await a.done();
     const b = service(store, makeClaude().client, { ...settings, maxNotes: 4 });
     expect((await b.svc.openPr('acme/api#812')).cache?.stale).toBe(true);

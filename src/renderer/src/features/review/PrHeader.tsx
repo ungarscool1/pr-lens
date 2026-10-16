@@ -1,29 +1,20 @@
 import { useState } from 'react';
-import type { OpenPrResult } from '../../../../shared/ipc';
-import type { Analysis, CacheInfo } from '../../../../shared/review';
-import { Blueprint, Icon } from '../../ds';
-import { api, run } from '../../lib/api';
-import type { Job } from './useReview';
+import type { ReactNode } from 'react';
+import type { PrMeta, PrRef } from '../../../../shared/pr';
+import { Icon } from '../../ds';
+import { openExternal } from '../../lib/api';
 
 interface Props {
-  pr: OpenPrResult;
-  analysis: Analysis | null;
-  cache: CacheInfo | null;
-  job: Job | null;
-  jobError: string | null;
-  stats: { high: number; medium: number; mine: number; seen: number };
-  onRun: () => void;
-  onCancel: () => void;
+  prRef: PrRef;
+  meta: PrMeta;
+  /** The summary card. */
+  children: ReactNode;
 }
 
 const STATE_LABEL = { OPEN: 'Open', CLOSED: 'Closed', MERGED: 'Merged' } as const;
 
-export function PrHeader({ pr, analysis, cache, job, jobError, stats, onRun, onCancel }: Props) {
+export function PrHeader({ prRef: ref, meta, children }: Props) {
   const [showDesc, setShowDesc] = useState(false);
-  const { meta, target } = pr;
-  const ref = target.ref;
-  const openOnGitHub = (): void =>
-    void run(api.shell.openExternal({ url: meta.url })).catch(() => undefined);
 
   return (
     <div className="pr-head">
@@ -33,7 +24,7 @@ export function PrHeader({ pr, analysis, cache, job, jobError, stats, onRun, onC
         </span>
         <span aria-hidden="true">/</span>
         <span>#{ref.number}</span>
-        <button className="link" onClick={openOnGitHub}>
+        <button className="link" onClick={() => openExternal(meta.url)}>
           Open on GitHub ↗
         </button>
       </nav>
@@ -85,82 +76,7 @@ export function PrHeader({ pr, analysis, cache, job, jobError, stats, onRun, onC
         </div>
       )}
 
-      <Blueprint className="summary">
-        <div className="summary-text" aria-live="polite">
-          <span className="card-kicker">
-            <Icon name="lens" size={13} />
-            PR Lens summary · private
-          </span>
-          {job ? (
-            <>
-              <p>{job.message}</p>
-              <div className="summary-actions">
-                <button className="btn btn-secondary" onClick={onCancel} disabled={!job.id}>
-                  Cancel
-                </button>
-              </div>
-            </>
-          ) : jobError ? (
-            <>
-              <p>{jobError}</p>
-              <div className="summary-actions">
-                <button className="btn btn-secondary" onClick={onRun}>
-                  Try again
-                </button>
-              </div>
-            </>
-          ) : analysis ? (
-            <>
-              <p>{analysis.summary}</p>
-              {cache?.stale && (
-                <p className="summary-note">
-                  Cached from a run with other settings or prompts. Re-run to refresh it.
-                </p>
-              )}
-              {cache && !cache.saved && (
-                <p className="summary-note">
-                  This review could not be saved to disk; it will be gone after a restart.
-                </p>
-              )}
-            </>
-          ) : pr.estimate.blocked ? (
-            <p>{pr.estimate.blocked}</p>
-          ) : (
-            <>
-              <p>
-                Not reviewed yet. About {Math.round(pr.estimate.inputTokens / 1000)}k input tokens
-                {pr.estimate.chunks > 1
-                  ? `, in ${pr.estimate.chunks} chunks plus a merge pass`
-                  : ''}
-                .
-              </p>
-              <div className="summary-actions">
-                <button className="btn btn-primary" onClick={onRun}>
-                  Run review
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        <dl className="stats">
-          <div className="stat">
-            <dt>High</dt>
-            <dd>{stats.high}</dd>
-          </div>
-          <div className="stat">
-            <dt>Medium</dt>
-            <dd>{stats.medium}</dd>
-          </div>
-          <div className="stat">
-            <dt>Mine</dt>
-            <dd>{stats.mine}</dd>
-          </div>
-          <div className="stat">
-            <dt>Seen</dt>
-            <dd>{stats.seen}</dd>
-          </div>
-        </dl>
-      </Blueprint>
+      {children}
     </div>
   );
 }

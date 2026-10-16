@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../../shared/errors';
 import type { Health } from '../../shared/health';
-import { MergeOutput, ModelOutput } from '../../shared/review';
+import { MergeOutput, ModelOutput, ReleaseOutput } from '../../shared/review';
 import type { Usage } from '../../shared/review';
 import type { Exec } from '../exec/exec';
 import { claudeEnv, requireBin } from '../exec/toolchain';
@@ -28,12 +28,15 @@ export interface ClaudeClient {
   review(req: ClaudeRunRequest): Promise<ClaudeRunResult<ModelOutput>>;
   /** The merge pass over validated chunk candidates (merge.v1). */
   merge(req: ClaudeRunRequest): Promise<ClaudeRunResult<MergeOutput>>;
+  /** The release summary for a tag-to-tag compare (release.v1). */
+  release(req: ClaudeRunRequest): Promise<ClaudeRunResult<ReleaseOutput>>;
 }
 
 const jsonSchemaOf = (schema: z.ZodType): string =>
   JSON.stringify(z.toJSONSchema(schema, { target: 'draft-7' }));
 export const REVIEW_JSON_SCHEMA = jsonSchemaOf(ModelOutput);
 export const MERGE_JSON_SCHEMA = jsonSchemaOf(MergeOutput);
+export const RELEASE_JSON_SCHEMA = jsonSchemaOf(ReleaseOutput);
 
 const Envelope = z.object({
   is_error: z.boolean(),
@@ -93,6 +96,10 @@ export function parseEnvelope<T>(stdout: string, schema: z.ZodType<T>): ClaudeRu
     const msg = env.data.result ?? '';
     if (/log ?in|not logged|authenticat|oauth/i.test(msg))
       throw new AppError('CLAUDE_NOT_LOGGED_IN');
+    // e.g. "You've hit your session limit · resets 8pm": say so, including when it resets.
+    if (/usage limit|session limit|weekly limit|rate limit|hit your .*limit/i.test(msg)) {
+      throw new AppError('CLAUDE_LIMIT', `Claude usage limit reached: ${msg.slice(0, 160)}`);
+    }
     throw new AppError(
       'MODEL_ERROR',
       `Claude review failed: ${msg.slice(0, 200) || env.data.subtype || 'unknown error'}`,
@@ -197,5 +204,6 @@ export function createClaudeClient(
 
     review: (req) => structured(req, ModelOutput, REVIEW_JSON_SCHEMA),
     merge: (req) => structured(req, MergeOutput, MERGE_JSON_SCHEMA),
+    release: (req) => structured(req, ReleaseOutput, RELEASE_JSON_SCHEMA),
   };
 }

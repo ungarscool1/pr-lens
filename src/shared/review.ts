@@ -189,5 +189,34 @@ export type ReviewEvent = { jobId: string; targetKey: string } & (
   | { type: 'started' }
   | { type: 'progress'; message: string }
   | { type: 'done'; analysis: Analysis; cache: CacheInfo }
+  | { type: 'release'; release: ReleaseSummary; cached: boolean }
   | { type: 'error'; error: SerializedError }
 );
+
+export const RELEASE_PROMPT_VERSION = 'release.v1';
+
+/** Tag-to-tag compares: a release summary. `risky` cites note IDs from the review, if one ran. */
+export const ReleaseOutput = z
+  .object({
+    headline: z.string().max(160),
+    changes: z
+      .array(
+        z
+          .object({
+            area: z.string().max(60),
+            bullets: z.array(z.string().max(240)).min(1).max(8),
+          })
+          .strict(),
+      )
+      .max(12),
+    risky: z.array(z.string().max(40)).max(10),
+  })
+  .strict();
+export type ReleaseOutput = z.infer<typeof ReleaseOutput>;
+
+export const ReleaseSummary = ReleaseOutput.extend({
+  targetKey: z.string(),
+  usage: Usage,
+  createdAt: z.number(),
+});
+export type ReleaseSummary = z.infer<typeof ReleaseSummary>;

@@ -2,15 +2,17 @@ import { useState } from 'react';
 import type { Health } from '../../../../shared/health';
 import { parsePrInput } from '../../../../shared/pr';
 import type { PrRef } from '../../../../shared/pr';
+import type { View } from '../../App';
 import { Blueprint, Icon } from '../../ds';
 import './header.css';
 
 interface Props {
   current: PrRef | null;
-  view: 'review' | 'settings';
+  view: View;
   health: Health | null;
   onOpen: (input: string) => void;
   onShowReview: () => void;
+  onShowCompare: () => void;
   onShowSettings: () => void;
 }
 
@@ -37,7 +39,15 @@ function healthLabel(h: Health | null): {
   };
 }
 
-export function Header({ current, view, health, onOpen, onShowReview, onShowSettings }: Props) {
+export function Header({
+  current,
+  view,
+  health,
+  onOpen,
+  onShowReview,
+  onShowCompare,
+  onShowSettings,
+}: Props) {
   const [value, setValue] = useState('');
   const [invalid, setInvalid] = useState(false);
   const hl = healthLabel(health);
@@ -69,7 +79,11 @@ export function Header({ current, view, health, onOpen, onShowReview, onShowSett
             #{current.number}
           </button>
         )}
-        <button className="tab" disabled title="Compare arrives in phase 4">
+        <button
+          className="tab"
+          aria-current={view === 'compare' ? 'page' : undefined}
+          onClick={onShowCompare}
+        >
           Compare
         </button>
       </nav>

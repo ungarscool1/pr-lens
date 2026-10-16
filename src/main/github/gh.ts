@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AppError } from '../../shared/errors';
 import type { BinHealth, Health } from '../../shared/health';
 import type { LinkedIssue, PrMeta, PrRef } from '../../shared/pr';
+import type { CompareCommit, RefSuggestion, RepoRef } from '../../shared/subject';
 import type { Exec } from '../exec/exec';
 import { ghEnv, requireBin } from '../exec/toolchain';
 import type { ToolchainService } from '../exec/toolchain';
@@ -11,7 +12,70 @@ export interface GitHubClient {
   prMeta(ref: PrRef): Promise<PrMeta>;
   /** Unified diff, three-dot (merge-base), exactly what GitHub shows. */
   prDiff(ref: PrRef): Promise<string>;
+  /** Branch, tag or SHA → full commit SHA. */
+  resolveCommit(repo: RepoRef, ref: string): Promise<string>;
+  compare(repo: RepoRef, baseSha: string, headSha: string): Promise<CompareInfo>;
+  /** Three-dot unified diff of a compare range (GitHub's API has no two-dot diff). */
+  compareDiff(repo: RepoRef, baseSha: string, headSha: string): Promise<string>;
+  tagsAmong(repo: RepoRef, names: string[]): Promise<Set<string>>;
+  searchRefs(
+    repo: RepoRef,
+    query: string,
+  ): Promise<{ defaultBranch: string | null; refs: RefSuggestion[] }>;
 }
+
+export interface CompareInfo {
+  mergeBaseSha: string;
+  aheadBy: number;
+  behindBy: number;
+  totalCommits: number;
+  commits: CompareCommit[];
+  url: string;
+}
+
+// Constant jq filter: the compare JSON carries every file patch; keep only what we use.
+const COMPARE_JQ =
+  '{merge_base: .merge_base_commit.sha, ahead: .ahead_by, behind: .behind_by, total: .total_commits, url: .html_url, commits: [.commits[] | {sha, subject: (.commit.message | split("\\n")[0]), author: (.author.login // .commit.author.name // "")}]}';
+
+const CompareJson = z.object({
+  merge_base: z.string(),
+  ahead: z.number(),
+  behind: z.number(),
+  total: z.number(),
+  url: z.string(),
+  commits: z.array(z.object({ sha: z.string(), subject: z.string(), author: z.string() })),
+});
+
+const REFS_QUERY = `query($owner: String!, $name: String!, $q: String!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef { name }
+    heads: refs(refPrefix: "refs/heads/", query: $q, first: 15) { nodes { name } }
+    tags: refs(refPrefix: "refs/tags/", query: $q, first: 15, orderBy: { field: TAG_COMMIT_DATE, direction: DESC }) { nodes { name } }
+  }
+}`;
+
+const RefsJson = z.object({
+  data: z.object({
+    repository: z.object({
+      defaultBranchRef: z.object({ name: z.string() }).nullable(),
+      heads: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+      tags: z.object({ nodes: z.array(z.object({ name: z.string() })) }),
+    }),
+  }),
+});
+
+const TAG_QUERY = `query($owner: String!, $name: String!, $a: String!, $b: String!) {
+  repository(owner: $owner, name: $name) { a: ref(qualifiedName: $a) { name } b: ref(qualifiedName: $b) { name } }
+}`;
+
+const TagJson = z.object({
+  data: z.object({
+    repository: z.object({
+      a: z.object({ name: z.string() }).nullable(),
+      b: z.object({ name: z.string() }).nullable(),
+    }),
+  }),
+});
 
 const MAX_LINKED_ISSUES = 3;
 const ISSUE_BODY_LIMIT = 2_000;
@@ -163,6 +227,102 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
 
     prDiff: (ref) =>
       gh(['pr', 'diff', String(ref.number), repoFlag(ref), '--color=never'], 120_000),
+
+    async resolveCommit(repo, ref) {
+      try {
+        const sha = (
+          await gh(['api', `repos/${repo.owner}/${repo.repo}/commits/${ref}`, '--jq', '.sha'])
+        ).trim();
+        if (!/^[0-9a-f]{40}$/.test(sha)) throw new AppError('NOT_FOUND');
+        return sha;
+      } catch (err) {
+        const e = AppError.from(err);
+        // gh says "No commit found for SHA" (HTTP 422) for any unknown branch, tag or SHA.
+        if (
+          e.code === 'NOT_FOUND' ||
+          (e.code === 'EXEC_FAILED' && /422|No commit found/i.test(e.message))
+        ) {
+          throw new AppError(
+            'NOT_FOUND',
+            `"${ref}" is not a branch, tag or commit in ${repo.owner}/${repo.repo}.`,
+          );
+        }
+        throw e;
+      }
+    },
+
+    async compare(repo, baseSha, headSha) {
+      const out = await gh([
+        'api',
+        `repos/${repo.owner}/${repo.repo}/compare/${baseSha}...${headSha}`,
+        '--jq',
+        COMPARE_JQ,
+      ]);
+      const c = CompareJson.parse(JSON.parse(out));
+      return {
+        mergeBaseSha: c.merge_base,
+        aheadBy: c.ahead,
+        behindBy: c.behind,
+        totalCommits: c.total,
+        commits: c.commits,
+        url: c.url,
+      };
+    },
+
+    compareDiff: (repo, baseSha, headSha) =>
+      gh(
+        [
+          'api',
+          '-H',
+          'Accept: application/vnd.github.diff',
+          `repos/${repo.owner}/${repo.repo}/compare/${baseSha}...${headSha}`,
+        ],
+        120_000,
+      ),
+
+    async tagsAmong(repo, names) {
+      const [a = '', b = a] = names;
+      const out = await gh([
+        'api',
+        'graphql',
+        '-f',
+        `query=${TAG_QUERY}`,
+        '-f',
+        `owner=${repo.owner}`,
+        '-f',
+        `name=${repo.repo}`,
+        '-f',
+        `a=refs/tags/${a}`,
+        '-f',
+        `b=refs/tags/${b}`,
+      ]);
+      const r = TagJson.parse(JSON.parse(out)).data.repository;
+      return new Set([r.a?.name, r.b?.name].filter((n): n is string => !!n));
+    },
+
+    async searchRefs(repo, query) {
+      // -f (not -F): values stay strings, so a repo named "123" is not sent as a number.
+      const out = await gh([
+        'api',
+        'graphql',
+        '-f',
+        `query=${REFS_QUERY}`,
+        '-f',
+        `owner=${repo.owner}`,
+        '-f',
+        `name=${repo.repo}`,
+        '-f',
+        `q=${query}`,
+      ]);
+      const r = RefsJson.parse(JSON.parse(out)).data.repository;
+      return {
+        defaultBranch: r.defaultBranchRef?.name ?? null,
+        refs: [
+          ...r.heads.nodes.map((n) => ({ name: n.name, kind: 'branch' as const })),
+          ...r.tags.nodes.map((n) => ({ name: n.name, kind: 'tag' as const })),
+        ],
+      };
+    },
   };
 }
 

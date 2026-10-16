@@ -6,6 +6,7 @@ import { buildDiffModel } from '../diff/parse';
 import type { ClaudeClient, ClaudeRunRequest } from './claude';
 import { createLimiter } from './limiter';
 import { runReviewPipeline } from './pipeline';
+import { prContext } from './prompt';
 import type { PipelineInput } from './pipeline';
 
 const usage = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 0, cacheCreationTokens: 0 };
@@ -79,6 +80,7 @@ function fakeClaude(opts: { failChunk?: number; failMerge?: boolean } = {}) {
       };
       return { output, usage };
     },
+    release: () => Promise.reject(new Error('unused')),
     async merge(req: ClaudeRunRequest) {
       calls.push({ kind: 'merge', prompt: req.prompt });
       if (opts.failMerge) throw new AppError('MODEL_BAD_JSON');
@@ -113,8 +115,12 @@ function fakeClaude(opts: { failChunk?: number; failMerge?: boolean } = {}) {
 }
 
 const input = (over: Partial<PipelineInput> = {}): PipelineInput => ({
-  target: { key: 'o/r#1@bbbbbbb2', ref: { owner: 'o', repo: 'r', number: 1 }, headSha: 'bbbbbbb2' },
-  meta,
+  target: {
+    key: 'o/r#1@bbbbbbb2',
+    subject: { kind: 'pr', ref: { owner: 'o', repo: 'r', number: 1 } },
+    headSha: 'bbbbbbb2',
+  },
+  context: prContext({ owner: 'o', repo: 'r', number: 1 }, meta),
   diff,
   settings: { maxNotes: 8, model: null, reviewTimeoutSec: 60 },
   sandboxDir: '/tmp',

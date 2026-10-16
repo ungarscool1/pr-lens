@@ -12,3 +12,7 @@ export async function run<T>(p: Promise<Result<T>>): Promise<T> {
 
 export const errorMessage = (e: unknown): string =>
   e instanceof AppError ? e.message : 'Something went wrong inside PR Lens.';
+
+/** Opens an allow-listed https link in the system browser; main refuses anything else. */
+export const openExternal = (url: string): void =>
+  void run(api.shell.openExternal({ url })).catch(() => undefined);

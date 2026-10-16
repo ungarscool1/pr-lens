@@ -2,13 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Health } from '../../shared/health';
 import { parsePrInput } from '../../shared/pr';
 import type { SettingsView } from '../../shared/settings';
+import { ComparePage } from './features/compare/ComparePage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Header } from './features/shell/Header';
 import { api, errorMessage, run } from './lib/api';
 
+export type View = 'review' | 'compare' | 'settings';
+
 export function App() {
-  const [view, setView] = useState<'review' | 'settings'>('review');
+  const [view, setView] = useState<View>('review');
+  // Compare mounts on first visit (it may query refs) and then stays mounted, like the review.
+  const [compareOpened, setCompareOpened] = useState(false);
   const [prInput, setPrInput] = useState<string | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [settings, setSettings] = useState<SettingsView | null>(null);
@@ -41,6 +46,10 @@ export function App() {
           setView('review');
         }}
         onShowReview={() => setView('review')}
+        onShowCompare={() => {
+          setCompareOpened(true);
+          setView('compare');
+        }}
         onShowSettings={() => setView('settings')}
       />
       <div className="app-body">
@@ -62,8 +71,17 @@ export function App() {
           <div className="view" hidden={view !== 'review'}>
             <ReviewPage
               key={prInput}
-              input={prInput}
+              source={{ kind: 'pr', input: prInput }}
               active={view === 'review'}
+              autoRunMaxTokens={settings.autoRunMaxTokens}
+            />
+          </div>
+        )}
+        {compareOpened && settings && (
+          <div className="view" hidden={view !== 'compare'}>
+            <ComparePage
+              defaultRepo={current ? { owner: current.owner, repo: current.repo } : null}
+              active={view === 'compare'}
               autoRunMaxTokens={settings.autoRunMaxTokens}
             />
           </div>

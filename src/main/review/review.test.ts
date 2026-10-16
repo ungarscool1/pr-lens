@@ -3,7 +3,7 @@ import { DEFAULT_NOISE_GLOBS } from '../../shared/settings';
 import type { ModelNote, ModelOutput } from '../../shared/review';
 import { buildDiffModel } from '../diff/parse';
 import { SAMPLE_DIFF } from '../diff/fixtures';
-import { buildReviewPrompt } from './prompt';
+import { buildReviewPrompt, prContext } from './prompt';
 import { rankNotes, scoreNote } from './rank';
 import { normalizeLineId, validateModelOutput } from './validate';
 import type { ValidNote } from './validate';
@@ -258,7 +258,11 @@ describe('buildReviewPrompt', () => {
     commitCount: 3,
     linkedIssues: [],
   };
-  const built = buildReviewPrompt({ owner: 'acme', repo: 'api', number: 812 }, meta, diff, 8);
+  const built = buildReviewPrompt(
+    prContext({ owner: 'acme', repo: 'api', number: 812 }, meta),
+    diff,
+    8,
+  );
 
   it('shows line IDs and markers for reviewed files only', () => {
     expect(built.prompt).toContain(

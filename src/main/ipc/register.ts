@@ -69,12 +69,16 @@ export function registerIpc(
   });
   handle('settings:setOAuthToken', ({ token }) => s.settings.setOAuthToken(token));
   handle('github:openPr', ({ input }) => s.review.openPr(input));
-  handle('review:start', ({ targetKey, force }) => s.review.start(targetKey, force));
+  handle('github:openCompare', (input) => s.review.openCompare(input));
+  handle('github:searchRefs', ({ owner, repo, query }) =>
+    s.github.searchRefs({ owner, repo }, query),
+  );
+  handle('review:start', ({ targetKey, force, kind }) => s.review.start(targetKey, force, kind));
   handle('review:cancel', ({ jobId }) => s.review.cancel(jobId));
-  handle('notes:list', ({ ref }) => s.notes.list(ref));
-  handle('notes:create', ({ ref, ...note }) => s.notes.create(ref, note));
-  handle('notes:delete', ({ ref, id }) => s.notes.delete(ref, id));
-  handle('notes:patchState', ({ ref, id, patch }) => s.notes.patchState(ref, id, patch));
+  handle('notes:list', ({ subject }) => s.notes.list(subject));
+  handle('notes:create', ({ subject, ...note }) => s.notes.create(subject, note));
+  handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));
+  handle('notes:patchState', ({ subject, id, patch }) => s.notes.patchState(subject, id, patch));
   handle('shell:openExternal', async ({ url }) => {
     if (!isAllowedExternalUrl(url))
       throw new AppError('BAD_INPUT', 'That link is not on the allow-list.');

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
-import type { OpenPrResult } from '../../../../shared/ipc';
+import type { OpenResult } from '../../../../shared/ipc';
+import type { DiffMode } from '../../../../shared/subject';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, Seg } from '../../ds';
 import { DiffFile, fileDomId, lineDomId } from './DiffFile';
@@ -9,49 +10,63 @@ import { navigableNotes, passesFilter, stepNote, toViewNotes } from './model';
 import type { ComposerAt, Filter, ViewMode, ViewNote } from './model';
 import { noteDomId } from './NoteView';
 import type { RefTarget } from './NoteView';
+import { CompareHeader } from './CompareHeader';
 import { PrHeader } from './PrHeader';
+import { SummaryCard } from './SummaryCard';
 import { Sidebar } from './Sidebar';
 import { useReview } from './useReview';
-import type { ReviewState } from './useReview';
+import type { ReviewState, Source } from './useReview';
 import './review.css';
 
+const sourceLabel = (s: Source): string =>
+  s.kind === 'pr' ? s.input : `${s.owner}/${s.repo} ${s.base} → ${s.head}`;
+
 export function ReviewPage({
-  input,
+  source,
   active,
   autoRunMaxTokens,
+  onMode,
 }: {
-  input: string;
+  source: Source;
   active: boolean;
   autoRunMaxTokens: number;
+  /** Compare only: switch between merge-base and direct diffs. */
+  onMode?: (mode: DiffMode) => void;
 }) {
-  const review = useReview(input, autoRunMaxTokens);
+  const review = useReview(source, autoRunMaxTokens);
   const { load } = review;
   if (load.status === 'loading') {
     return (
       <div className="page-msg" role="status">
-        <p>Loading {input}…</p>
+        <p>Loading {sourceLabel(source)}…</p>
       </div>
     );
   }
   if (load.status === 'error') {
     return (
       <div className="page-msg" role="alert">
-        <h2>Could not open this pull request</h2>
+        <h2>
+          {source.kind === 'pr'
+            ? 'Could not open this pull request'
+            : 'Could not compare these refs'}
+        </h2>
         <p>{load.message}</p>
       </div>
     );
   }
-  return <LoadedReview pr={load.pr} review={review} active={active} />;
+  return <LoadedReview open={load.open} review={review} active={active} onMode={onMode} />;
 }
 
 function LoadedReview({
-  pr,
+  open,
   review,
   active,
+  onMode,
 }: {
-  pr: OpenPrResult;
+  open: OpenResult;
   review: ReviewState;
   active: boolean;
+  onMode: ((mode: DiffMode) => void) | undefined;
 }) {
   const { analysis, notes: notesFile, patchNote, addNote, deleteNote } = review;
   const noteState = notesFile.state;
@@ -64,7 +79,7 @@ function LoadedReview({
   const [composer, setComposer] = useState<ComposerAt | null>(null);
   const [scrollTo, setScrollTo] = useState<{ id: string; focus: boolean } | null>(null);
 
-  const files = pr.diff.files;
+  const files = open.diff.files;
   const risks = useMemo(
     () => new Map<string, FileRisk>((analysis?.files ?? []).map((f) => [f.fid, f])),
     [analysis],
@@ -164,6 +179,18 @@ function LoadedReview({
     mine: notesFile.mine.length,
     seen: allNotes.filter((n) => noteState[n.id]?.seen).length,
   };
+  const summary = (
+    <SummaryCard
+      estimate={open.estimate}
+      analysis={analysis}
+      cache={review.cache}
+      job={review.job?.kind === 'review' ? review.job : null}
+      jobError={review.jobError?.kind === 'review' ? review.jobError.message : null}
+      stats={stats}
+      onRun={() => review.runReview(false)}
+      onCancel={review.cancelReview}
+    />
+  );
   const viewedCount = reviewed.filter((f) => viewed[f.fid]).length;
   const saveNote = useCallback(
     (at: ComposerAt, body: string) => {
@@ -183,8 +210,8 @@ function LoadedReview({
         noteState={noteState}
         analysis={analysis}
         cache={review.cache}
-        estimate={pr.estimate}
-        headSha={pr.target.headSha}
+        estimate={open.estimate}
+        headSha={open.target.headSha}
         job={review.job}
         onJumpFile={jumpFile}
         onJumpNote={jumpNote}
@@ -192,16 +219,30 @@ function LoadedReview({
       />
       <div className="review-main-wrap">
         <main className="review-main">
-          <PrHeader
-            pr={pr}
-            analysis={analysis}
-            cache={review.cache}
-            job={review.job}
-            jobError={review.jobError}
-            stats={stats}
-            onRun={() => review.runReview(false)}
-            onCancel={review.cancelReview}
-          />
+          {open.header.kind === 'compare' ? (
+            <CompareHeader
+              meta={open.header.meta}
+              release={review.release}
+              releaseJob={review.job?.kind === 'release' ? review.job : null}
+              releaseError={review.jobError?.kind === 'release' ? review.jobError.message : null}
+              noteTitle={(id) => aiNotes.find((n) => n.id === id)?.title ?? null}
+              onMode={(m) => onMode?.(m)}
+              onRelease={review.runRelease}
+              onCancel={review.cancelReview}
+              onJumpNote={(id) => {
+                const n = allNotes.find((x) => x.id === id);
+                if (n) jumpNote(n);
+              }}
+            >
+              {summary}
+            </CompareHeader>
+          ) : (
+            open.target.subject.kind === 'pr' && (
+              <PrHeader prRef={open.target.subject.ref} meta={open.header.meta}>
+                {summary}
+              </PrHeader>
+            )
+          )}
           <div className="toolbar" role="toolbar" aria-label="Diff view">
             <div className="viewed">
               <span>

@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { OpenPrResult } from '../../../../shared/ipc';
+import type { CompareInput, OpenResult } from '../../../../shared/ipc';
 import type { NoteState, NotesFile } from '../../../../shared/notes';
-import type { Analysis, CacheInfo } from '../../../../shared/review';
+import type { Analysis, CacheInfo, ReleaseSummary } from '../../../../shared/review';
 import { api, errorMessage, run } from '../../lib/api';
 import type { ComposerAt } from './model';
 
 export type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; pr: OpenPrResult };
+  | { status: 'ready'; open: OpenResult };
+
+/** What the page shows: a PR by URL / owner/repo#n, or a compare range. */
+export type Source = { kind: 'pr'; input: string } | ({ kind: 'compare' } & CompareInput);
 
 export interface Job {
   id: string | null;
+  kind: 'review' | 'release';
   message: string;
 }
 
@@ -20,12 +24,15 @@ export interface ReviewState {
   analysis: Analysis | null;
   /** Where `analysis` came from: the on-disk cache or a run. */
   cache: CacheInfo | null;
+  /** Compare ranges only. */
+  release: ReleaseSummary | null;
   job: Job | null;
-  jobError: string | null;
+  jobError: { kind: Job['kind']; message: string } | null;
   notes: NotesFile;
   notice: string | null;
   clearNotice(): void;
   runReview(force: boolean): void;
+  runRelease(force: boolean): void;
   cancelReview(): void;
   addNote(at: ComposerAt, path: string, body: string): Promise<boolean>;
   deleteNote(id: string): void;
@@ -34,60 +41,82 @@ export interface ReviewState {
 
 const EMPTY_NOTES: NotesFile = { mine: [], state: {} };
 
-export function useReview(input: string, autoRunMaxTokens: number): ReviewState {
+// The IPC schema is strict, so only the compare fields go over the wire.
+const compareInput = ({ owner, repo, base, head, mode }: CompareInput): CompareInput => ({
+  owner,
+  repo,
+  base,
+  head,
+  mode,
+});
+
+export function useReview(source: Source, autoRunMaxTokens: number): ReviewState {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [cache, setCache] = useState<CacheInfo | null>(null);
+  const [release, setRelease] = useState<ReleaseSummary | null>(null);
   const [job, setJob] = useState<Job | null>(null);
-  const [jobError, setJobError] = useState<string | null>(null);
+  const [jobError, setJobError] = useState<ReviewState['jobError']>(null);
   const [notes, setNotes] = useState<NotesFile>(EMPTY_NOTES);
   const [notice, setNotice] = useState<string | null>(null);
-  const targetKey = load.status === 'ready' ? load.pr.target.key : null;
-  const ref = load.status === 'ready' ? load.pr.target.ref : null;
+  const targetKey = load.status === 'ready' ? load.open.target.key : null;
+  const subject = load.status === 'ready' ? load.open.target.subject : null;
   const jobRef = useRef<Job | null>(null);
   useEffect(() => {
     jobRef.current = job;
   }, [job]);
 
-  const startJob = useCallback((key: string, force: boolean) => {
+  const startJob = useCallback((key: string, force: boolean, kind: Job['kind']) => {
     setJobError(null);
-    setJob({ id: null, message: 'Starting review…' });
-    run(api.review.start({ targetKey: key, force }))
+    setJob({ id: null, kind, message: kind === 'review' ? 'Starting review…' : 'Starting…' });
+    run(api.review.start({ targetKey: key, force, kind }))
       .then(({ jobId }) => setJob((j) => (j ? { ...j, id: jobId } : j)))
       .catch((e: unknown) => {
         setJob(null);
-        setJobError(errorMessage(e));
+        setJobError({ kind, message: errorMessage(e) });
       });
   }, []);
 
   const runReview = useCallback(
     (force: boolean) => {
-      if (targetKey) startJob(targetKey, force);
+      if (targetKey) startJob(targetKey, force, 'review');
+    },
+    [targetKey, startJob],
+  );
+  const runRelease = useCallback(
+    (force: boolean) => {
+      if (targetKey) startJob(targetKey, force, 'release');
     },
     [targetKey, startJob],
   );
 
-  // The page is keyed by input, so this runs once per PR with fresh state. The auto-run
-  // budget is read once at mount: changing it in Settings must not reload the PR.
+  // The page is keyed by its source, so this runs once with fresh state. Source and auto-run
+  // budget are read once at mount: changing the budget in Settings must not reload the page.
+  const [src] = useState(source);
   const [autoRunBudget] = useState(autoRunMaxTokens);
   useEffect(() => {
     let live = true;
     (async () => {
       try {
-        const pr = await run(api.github.openPr({ input }));
-        const file = await run(api.notes.list({ ref: pr.target.ref }));
+        const open = await run(
+          src.kind === 'pr'
+            ? api.github.openPr({ input: src.input })
+            : api.github.openCompare(compareInput(src)),
+        );
+        const file = await run(api.notes.list({ subject: open.target.subject }));
         if (!live) return;
         setNotes(file);
-        setAnalysis(pr.analysis);
-        setCache(pr.cache);
-        setLoad({ status: 'ready', pr });
+        setAnalysis(open.analysis);
+        setCache(open.cache);
+        setRelease(open.release);
+        setLoad({ status: 'ready', open });
         if (
-          !pr.analysis &&
-          !pr.estimate.blocked &&
+          !open.analysis &&
+          !open.estimate.blocked &&
           autoRunBudget > 0 &&
-          pr.estimate.inputTokens <= autoRunBudget
+          open.estimate.inputTokens <= autoRunBudget
         ) {
-          startJob(pr.target.key, false);
+          startJob(open.target.key, false, 'review');
         }
       } catch (e) {
         if (live) setLoad({ status: 'error', message: errorMessage(e) });
@@ -96,7 +125,7 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
     return () => {
       live = false;
     };
-  }, [input, autoRunBudget, startJob]);
+  }, [src, autoRunBudget, startJob]);
 
   // Review events carry the target key, so they match even before `start` replies with a job ID.
   useEffect(() => {
@@ -105,15 +134,22 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
       if (e.targetKey !== targetKey) return;
       const current = jobRef.current;
       if (current?.id && current.id !== e.jobId) return;
-      if (e.type === 'started') setJob({ id: e.jobId, message: 'Queued…' });
-      else if (e.type === 'progress') setJob({ id: e.jobId, message: e.message });
-      else if (e.type === 'done') {
+      if (e.type === 'started')
+        setJob((j) => ({ id: e.jobId, kind: j?.kind ?? 'review', message: 'Queued…' }));
+      else if (e.type === 'progress')
+        setJob((j) => ({ id: e.jobId, kind: j?.kind ?? 'review', message: e.message }));
+      else if (e.type === 'release') {
+        setJob(null);
+        setRelease(e.release);
+      } else if (e.type === 'done') {
         setJob(null);
         setAnalysis(e.analysis);
         setCache(e.cache);
       } else {
         setJob(null);
-        if (e.error.code !== 'CANCELLED') setJobError(e.error.message);
+        if (e.error.code !== 'CANCELLED') {
+          setJobError({ kind: current?.kind ?? 'review', message: e.error.message });
+        }
       }
     });
   }, [targetKey]);
@@ -126,21 +162,28 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
 
   const patchNote = useCallback(
     (id: string, patch: NoteState) => {
-      if (!ref) return;
+      if (!subject) return;
       setNotes((f) => ({ ...f, state: { ...f.state, [id]: { ...f.state[id], ...patch } } }));
-      run(api.notes.patchState({ ref, id, patch })).catch((e: unknown) =>
+      run(api.notes.patchState({ subject, id, patch })).catch((e: unknown) =>
         setNotice(`Could not save note state: ${errorMessage(e)}`),
       );
     },
-    [ref],
+    [subject],
   );
 
   const addNote = useCallback(
     async (at: ComposerAt, path: string, body: string): Promise<boolean> => {
-      if (!ref) return false;
+      if (!subject) return false;
       try {
         const created = await run(
-          api.notes.create({ ref, path, side: at.side, line: at.line, lineId: at.lineId, body }),
+          api.notes.create({
+            subject,
+            path,
+            side: at.side,
+            line: at.line,
+            lineId: at.lineId,
+            body,
+          }),
         );
         setNotes((f) => ({ ...f, mine: [...f.mine, created] }));
         return true;
@@ -149,17 +192,17 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
         return false;
       }
     },
-    [ref],
+    [subject],
   );
 
   const deleteNote = useCallback(
     (id: string) => {
-      if (!ref) return;
-      run(api.notes.delete({ ref, id }))
+      if (!subject) return;
+      run(api.notes.delete({ subject, id }))
         .then(() => setNotes((f) => ({ ...f, mine: f.mine.filter((n) => n.id !== id) })))
         .catch((e: unknown) => setNotice(`Could not delete the note: ${errorMessage(e)}`));
     },
-    [ref],
+    [subject],
   );
 
   const clearNotice = useCallback(() => setNotice(null), []);
@@ -168,12 +211,14 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
     load,
     analysis,
     cache,
+    release,
     job,
     jobError,
     notes,
     notice,
     clearNotice,
     runReview,
+    runRelease,
     cancelReview,
     addNote,
     deleteNote,
