@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { Side } from './diff';
 import type { SerializedError } from './errors';
 
 export const PROMPT_VERSION = 'review.v1';
@@ -103,74 +102,72 @@ export const MergeOutput = z
   .strict();
 export type MergeOutput = z.infer<typeof MergeOutput>;
 
+// Analysis types are zod schemas: an analysis is written to disk and read back (phase 3), and
+// what comes back from disk is checked like any other input.
+
 /** A model note after its line IDs were checked and resolved to real lines. */
-export interface AiNote {
-  id: string;
-  source: 'ai';
-  fid: string;
-  path: string;
-  side: Side;
+export const AiNote = z.object({
+  id: z.string(),
+  source: z.literal('ai'),
+  fid: z.string(),
+  path: z.string(),
+  side: z.enum(['LEFT', 'RIGHT']),
   /** Empty for file-level notes. */
-  startLineId: string;
-  endLineId: string;
+  startLineId: z.string(),
+  endLineId: z.string(),
   /** 0 for file-level notes. */
-  startLine: number;
-  endLine: number;
+  startLine: z.number().int(),
+  endLine: z.number().int(),
   /** The model named a shown file but no line in it that could be found. */
-  fileLevel: boolean;
-  severity: Severity;
-  category: Category;
-  title: string;
-  body: string;
-  question?: string;
-  refs: string[];
-  confidence: number;
-  score: number;
-  repaired: boolean;
-}
+  fileLevel: z.boolean(),
+  severity: Severity,
+  category: Category,
+  title: z.string(),
+  body: z.string(),
+  question: z.string().optional(),
+  refs: z.array(z.string()),
+  confidence: z.number(),
+  score: z.number(),
+  repaired: z.boolean(),
+});
+export type AiNote = z.infer<typeof AiNote>;
 
-export interface DroppedNote {
-  key: string;
-  title: string;
-  reason: string;
-}
+export const DroppedNote = z.object({ key: z.string(), title: z.string(), reason: z.string() });
+export type DroppedNote = z.infer<typeof DroppedNote>;
 
-export interface FileRisk {
-  fid: string;
-  risk: Risk;
-  why: string;
-}
+export const FileRisk = z.object({ fid: z.string(), risk: Risk, why: z.string() });
+export type FileRisk = z.infer<typeof FileRisk>;
 
-export interface Usage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-}
+export const Usage = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadTokens: z.number(),
+  cacheCreationTokens: z.number(),
+});
+export type Usage = z.infer<typeof Usage>;
 
-export interface SecretFinding {
-  lineId: string | null;
-  kind: string;
-}
+export const SecretFinding = z.object({ lineId: z.string().nullable(), kind: z.string() });
+export type SecretFinding = z.infer<typeof SecretFinding>;
 
-export interface Analysis {
-  targetKey: string;
-  headSha: string;
-  promptVersion: string;
-  summary: string;
-  files: FileRisk[];
-  readingOrder: string[];
-  notes: AiNote[];
-  dropped: DroppedNote[];
-  usage: Usage;
-  chunks: number;
+export const Analysis = z.object({
+  targetKey: z.string(),
+  headSha: z.string(),
+  promptVersion: z.string(),
+  summary: z.string(),
+  files: z.array(FileRisk),
+  readingOrder: z.array(z.string()),
+  notes: z.array(AiNote),
+  dropped: z.array(DroppedNote),
+  usage: Usage,
+  chunks: z.number().int(),
   /** Chunks whose review failed; their files have no AI notes. */
-  failedChunks: number;
+  failedChunks: z.number().int(),
   /** How chunk results were combined: not needed, by the merge model pass, or by rules after it failed. */
-  merge: 'none' | 'model' | 'fallback';
-  redactions: SecretFinding[];
-  createdAt: number;
-}
+  merge: z.enum(['none', 'model', 'fallback']),
+  redactions: z.array(SecretFinding),
+  createdAt: z.number(),
+});
+export type Analysis = z.infer<typeof Analysis>;
 
 export interface Estimate {
   inputTokens: number;
@@ -180,10 +177,17 @@ export interface Estimate {
   blocked: string | null;
 }
 
+/** Where the shown analysis came from. `stale`: cached with other settings; `saved`: on disk. */
+export interface CacheInfo {
+  from: 'cache' | 'run';
+  stale: boolean;
+  saved: boolean;
+}
+
 /** Every event names its target, so the renderer can match it before `start` has replied. */
 export type ReviewEvent = { jobId: string; targetKey: string } & (
   | { type: 'started' }
   | { type: 'progress'; message: string }
-  | { type: 'done'; analysis: Analysis }
+  | { type: 'done'; analysis: Analysis; cache: CacheInfo }
   | { type: 'error'; error: SerializedError }
 );

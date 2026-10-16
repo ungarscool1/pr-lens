@@ -4,10 +4,11 @@ import type { DiffModel } from '../../shared/diff';
 import type { OpenPrResult } from '../../shared/ipc';
 import { parsePrInput, targetKey } from '../../shared/pr';
 import type { PrMeta, Target } from '../../shared/pr';
-import type { Analysis, Estimate, ReviewEvent } from '../../shared/review';
+import type { Estimate, ReviewEvent } from '../../shared/review';
 import { buildDiffModel } from '../diff/parse';
 import type { GitHubClient } from '../github/gh';
 import type { SettingsService } from '../settings/settings';
+import type { AnalysisCache } from './cache';
 import type { ClaudeClient } from './claude';
 import { createLimiter } from './limiter';
 import { runReviewPipeline } from './pipeline';
@@ -25,6 +26,7 @@ interface Deps {
   settings: SettingsService;
   sandboxDir: string;
   emit: (e: ReviewEvent) => void;
+  cache: AnalysisCache;
   /** Chunk budget override; only set in development (PR_LENS_CHUNK_BUDGET). */
   chunkBudget?: number;
 }
@@ -40,8 +42,6 @@ interface LoadedTarget {
 
 export function createReviewService(deps: Deps): ReviewService {
   const targets = new Map<string, LoadedTarget>();
-  // ponytail: in-memory only. Phase 3 persists analyses per (repo, PR, head SHA) on disk.
-  const analyses = new Map<string, Analysis>();
   const jobs = new Map<string, AbortController>();
   const limit = createLimiter(MAX_CONCURRENT_CLAUDE);
 
@@ -84,12 +84,14 @@ export function createReviewService(deps: Deps): ReviewService {
       const target: Target = { key: targetKey(ref, meta.headSha), ref, headSha: meta.headSha };
       const loaded = { target, meta, diff };
       targets.set(target.key, loaded);
+      const hit = await deps.cache.get(ref, meta.headSha, deps.settings.current());
       return {
         target,
         meta,
         diff,
         estimate: estimate(loaded),
-        analysis: analyses.get(target.key) ?? null,
+        analysis: hit?.analysis ?? null,
+        cache: hit ? { from: 'cache', stale: hit.stale, saved: true } : null,
       };
     },
 
@@ -98,33 +100,60 @@ export function createReviewService(deps: Deps): ReviewService {
       if (!loaded)
         throw new AppError('BAD_INPUT', 'Open the pull request again before reviewing it.');
       const jobId = randomUUID();
-      const cached = analyses.get(key);
       const ctrl = new AbortController();
       jobs.set(jobId, ctrl);
+      const base = { jobId, targetKey: key };
+
       queueMicrotask(() => {
-        deps.emit({ jobId, targetKey: key, type: 'started' });
-        if (cached && !force) {
-          deps.emit({ jobId, targetKey: key, type: 'done', analysis: cached });
-          jobs.delete(jobId);
-          return;
-        }
-        runReviewPipeline(deps.claude, {
-          ...loaded,
-          settings: deps.settings.current(),
-          sandboxDir: deps.sandboxDir,
-          budget: deps.chunkBudget,
-          signal: ctrl.signal,
-          limit,
-          onProgress: (message) => deps.emit({ jobId, targetKey: key, type: 'progress', message }),
-        })
-          .then((analysis) => {
-            analyses.set(key, analysis);
-            deps.emit({ jobId, targetKey: key, type: 'done', analysis });
-          })
-          .catch((err: unknown) =>
-            deps.emit({ jobId, targetKey: key, type: 'error', error: AppError.from(err).toJSON() }),
-          )
-          .finally(() => jobs.delete(jobId));
+        deps.emit({ ...base, type: 'started' });
+        void (async () => {
+          try {
+            // Settings are read once, so the cache key matches what the run actually used.
+            const settings = deps.settings.current();
+            const hit = force
+              ? null
+              : await deps.cache.get(loaded.target.ref, loaded.target.headSha, settings);
+            if (hit) {
+              deps.emit({
+                ...base,
+                type: 'done',
+                analysis: hit.analysis,
+                cache: { from: 'cache', stale: hit.stale, saved: true },
+              });
+              return;
+            }
+            const analysis = await runReviewPipeline(deps.claude, {
+              ...loaded,
+              settings,
+              sandboxDir: deps.sandboxDir,
+              budget: deps.chunkBudget,
+              signal: ctrl.signal,
+              limit,
+              onProgress: (message) => deps.emit({ ...base, type: 'progress', message }),
+            });
+            const saved = await deps.cache.put(loaded.target.ref, analysis, settings).then(
+              () => true,
+              (err: unknown) => {
+                // The review itself succeeded; show it, and say it was not saved.
+                console.warn(
+                  '[cache] could not save analysis:',
+                  err instanceof Error ? err.name : 'unknown error',
+                );
+                return false;
+              },
+            );
+            deps.emit({
+              ...base,
+              type: 'done',
+              analysis,
+              cache: { from: 'run', stale: false, saved },
+            });
+          } catch (err) {
+            deps.emit({ ...base, type: 'error', error: AppError.from(err).toJSON() });
+          } finally {
+            jobs.delete(jobId);
+          }
+        })();
       });
       return { jobId };
     },

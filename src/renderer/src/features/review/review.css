@@ -312,6 +312,10 @@
   max-width: 720px;
   text-wrap: pretty;
 }
+.summary-text p.summary-note {
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
 .summary-actions {
   display: flex;
   gap: 8px;

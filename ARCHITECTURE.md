@@ -77,10 +77,22 @@ renderer can match events that arrive before `review:start` has replied.
 
 ## Storage
 
-`src/main/store/json-store.ts`: atomic JSON files (temp + rename, mode 0600) under
-`app.getPath('userData')`. Private notes and note state live in `notes/<owner>__<repo>__<n>.json`,
-keyed by PR so they survive new pushes. AI note IDs are a hash of path, category and anchor
-text, so seen/dismissed state carries over when a re-run finds the same thing.
+`src/main/store/json-store.ts`: atomic JSON files (temp + rename, mode 0600, writes serialized
+per file) under `app.getPath('userData')`, each read back through a zod schema.
+
+- **Analyses** (`src/main/review/cache.ts`): one file per (repo, PR, head SHA) at
+  `analyses/<owner>__<repo>__<n>/<headSha>.json`, holding `{ version, settingsKey, analysis }`.
+  Opening a PR or starting a review without "Re-run" serves the file instead of calling
+  `claude`; "Re-run" always runs and overwrites it. `settingsKey` hashes the prompt versions,
+  model, note cap and noise globs: a hit made with other settings is still shown, flagged
+  stale, so a paid-for review is never discarded silently. Unreadable or older-version files
+  are a miss (logged by error name only, never content). A new push means a new head SHA and
+  so a fresh review. There is no pruning yet.
+- **Private notes and note state** live in `notes/<owner>__<repo>__<n>.json`, keyed by PR so
+  they survive new pushes. AI note IDs are a hash of path, category and anchor text, so
+  seen/dismissed state carries over when a re-run finds the same thing.
+- **Settings** in `settings.json`; the optional Claude OAuth token in `claude-oauth.bin`,
+  encrypted with `safeStorage`.
 
 ## Renderer
 
@@ -92,9 +104,8 @@ logic (note ordering, filters, row building, intra-line highlights) and is unit-
 
 ## Later phases
 
-| Phase | Adds                                                                                             |
-| ----- | ------------------------------------------------------------------------------------------------ |
-| 3     | On-disk cache per (repo, PR, head SHA); "cached" badge. Today results live for the session only. |
-| 4     | Compare view (branch / tag / SHA, two-dot vs three-dot), release summary.                        |
-| 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal.            |
-| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.                    |
+| Phase | Adds                                                                                  |
+| ----- | ------------------------------------------------------------------------------------- |
+| 4     | Compare view (branch / tag / SHA, two-dot vs three-dot), release summary.             |
+| 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal. |
+| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.         |

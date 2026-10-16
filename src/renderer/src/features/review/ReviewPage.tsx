@@ -182,6 +182,7 @@ function LoadedReview({
         notes={allNotes}
         noteState={noteState}
         analysis={analysis}
+        cache={review.cache}
         estimate={pr.estimate}
         headSha={pr.target.headSha}
         job={review.job}
@@ -194,6 +195,7 @@ function LoadedReview({
           <PrHeader
             pr={pr}
             analysis={analysis}
+            cache={review.cache}
             job={review.job}
             jobError={review.jobError}
             stats={stats}

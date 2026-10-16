@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { OpenPrResult } from '../../../../shared/ipc';
 import type { NoteState, NotesFile } from '../../../../shared/notes';
-import type { Analysis } from '../../../../shared/review';
+import type { Analysis, CacheInfo } from '../../../../shared/review';
 import { api, errorMessage, run } from '../../lib/api';
 import type { ComposerAt } from './model';
 
@@ -18,6 +18,8 @@ export interface Job {
 export interface ReviewState {
   load: LoadState;
   analysis: Analysis | null;
+  /** Where `analysis` came from: the on-disk cache or a run. */
+  cache: CacheInfo | null;
   job: Job | null;
   jobError: string | null;
   notes: NotesFile;
@@ -35,6 +37,7 @@ const EMPTY_NOTES: NotesFile = { mine: [], state: {} };
 export function useReview(input: string, autoRunMaxTokens: number): ReviewState {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [cache, setCache] = useState<CacheInfo | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
   const [notes, setNotes] = useState<NotesFile>(EMPTY_NOTES);
@@ -76,6 +79,7 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
         if (!live) return;
         setNotes(file);
         setAnalysis(pr.analysis);
+        setCache(pr.cache);
         setLoad({ status: 'ready', pr });
         if (
           !pr.analysis &&
@@ -106,6 +110,7 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
       else if (e.type === 'done') {
         setJob(null);
         setAnalysis(e.analysis);
+        setCache(e.cache);
       } else {
         setJob(null);
         if (e.error.code !== 'CANCELLED') setJobError(e.error.message);
@@ -162,6 +167,7 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
   return {
     load,
     analysis,
+    cache,
     job,
     jobError,
     notes,

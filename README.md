@@ -4,7 +4,8 @@ A private, local review layer for GitHub pull requests. Paste a PR link, PR Lens
 through your own `gh`, runs one read-only pass through your own `claude` CLI, and overlays a
 few ranked attention points on a GitHub-style diff. Notes stay on your machine.
 
-Status: **phase 2** (MVP plus line-ID anchoring and chunked reviews of big PRs). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
+Status: **phase 3** (MVP, line-ID anchoring, chunked reviews of big PRs, and an on-disk
+review cache). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
 and what later phases add.
 
 ## Requirements
@@ -104,5 +105,7 @@ In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored i
   no tools, no MCP servers, no settings files and an allow-listed environment
   (`ANTHROPIC_API_KEY` and GitHub tokens are never passed).
 
-Private notes and seen/dismissed state are stored as JSON under the app's user-data directory
-(`~/Library/Application Support/pr-lens/notes/`).
+Reviews, private notes and seen/dismissed state are stored as JSON under the app's user-data
+directory (`~/Library/Application Support/pr-lens/`). A review is cached per head SHA: opening
+the same PR again, even after a restart, shows it without calling `claude` (the sidebar says
+"cached …"). **Re-run review** always runs a fresh pass; a new push to the PR gets a new review.

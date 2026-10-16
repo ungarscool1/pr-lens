@@ -1,7 +1,8 @@
 import type { DiffFile } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
 import type { NoteState } from '../../../../shared/notes';
-import type { Analysis, Estimate, FileRisk } from '../../../../shared/review';
+import type { Analysis, CacheInfo, Estimate, FileRisk } from '../../../../shared/review';
+import { ago } from '../../lib/time';
 import { SevTag } from '../../ds';
 import type { Job } from './useReview';
 import type { ViewNote } from './model';
@@ -17,6 +18,7 @@ interface Props {
   notes: ViewNote[];
   noteState: Readonly<Record<string, NoteState>>;
   analysis: Analysis | null;
+  cache: CacheInfo | null;
   estimate: Estimate;
   headSha: string;
   job: Job | null;
@@ -138,7 +140,7 @@ export function Sidebar(p: Props) {
           <dt>head</dt>
           <dd>
             {p.headSha.slice(0, 7)}
-            {p.analysis ? ' · this session' : ''}
+            {p.analysis && p.cache ? ` · ${cacheLabel(p.cache, p.analysis.createdAt)}` : ''}
           </dd>
           {p.analysis && (
             <>
@@ -201,6 +203,13 @@ export function Sidebar(p: Props) {
     </aside>
   );
 }
+
+const cacheLabel = (c: CacheInfo, createdAt: number): string =>
+  c.from === 'cache'
+    ? `cached ${ago(createdAt)}${c.stale ? ', older settings' : ''}`
+    : c.saved
+      ? 'reviewed just now'
+      : 'not saved';
 
 const MERGE_LABEL = {
   none: 'no merge pass',

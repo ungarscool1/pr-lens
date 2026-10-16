@@ -5,7 +5,7 @@ import { CreateNoteInput, DeleteNoteInput, PatchNoteStateInput } from './notes';
 import type { NotesFile, PrivateNote } from './notes';
 import { PrInput, PrRef, TargetKey } from './pr';
 import type { PrMeta, Target } from './pr';
-import type { Analysis, Estimate } from './review';
+import type { Analysis, CacheInfo, Estimate } from './review';
 import { OAuthTokenInput, SettingsPatch } from './settings';
 import type { SettingsView } from './settings';
 
@@ -14,8 +14,9 @@ export interface OpenPrResult {
   meta: PrMeta;
   diff: DiffModel;
   estimate: Estimate;
-  /** A finished analysis for this exact head SHA, if one exists. */
+  /** A finished analysis for this exact head SHA, from the on-disk cache, if one exists. */
   analysis: Analysis | null;
+  cache: CacheInfo | null;
 }
 
 /**

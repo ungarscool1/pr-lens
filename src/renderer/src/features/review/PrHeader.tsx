@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { OpenPrResult } from '../../../../shared/ipc';
-import type { Analysis } from '../../../../shared/review';
+import type { Analysis, CacheInfo } from '../../../../shared/review';
 import { Blueprint, Icon } from '../../ds';
 import { api, run } from '../../lib/api';
 import type { Job } from './useReview';
@@ -8,6 +8,7 @@ import type { Job } from './useReview';
 interface Props {
   pr: OpenPrResult;
   analysis: Analysis | null;
+  cache: CacheInfo | null;
   job: Job | null;
   jobError: string | null;
   stats: { high: number; medium: number; mine: number; seen: number };
@@ -17,7 +18,7 @@ interface Props {
 
 const STATE_LABEL = { OPEN: 'Open', CLOSED: 'Closed', MERGED: 'Merged' } as const;
 
-export function PrHeader({ pr, analysis, job, jobError, stats, onRun, onCancel }: Props) {
+export function PrHeader({ pr, analysis, cache, job, jobError, stats, onRun, onCancel }: Props) {
   const [showDesc, setShowDesc] = useState(false);
   const { meta, target } = pr;
   const ref = target.ref;
@@ -109,7 +110,19 @@ export function PrHeader({ pr, analysis, job, jobError, stats, onRun, onCancel }
               </div>
             </>
           ) : analysis ? (
-            <p>{analysis.summary}</p>
+            <>
+              <p>{analysis.summary}</p>
+              {cache?.stale && (
+                <p className="summary-note">
+                  Cached from a run with other settings or prompts. Re-run to refresh it.
+                </p>
+              )}
+              {cache && !cache.saved && (
+                <p className="summary-note">
+                  This review could not be saved to disk; it will be gone after a restart.
+                </p>
+              )}
+            </>
           ) : pr.estimate.blocked ? (
             <p>{pr.estimate.blocked}</p>
           ) : (

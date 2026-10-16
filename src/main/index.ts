@@ -10,6 +10,7 @@ import { createToolchain } from './exec/toolchain';
 import { createGhClient } from './github/gh';
 import { registerIpc } from './ipc/register';
 import { createNotes } from './notes/notes';
+import { createAnalysisCache } from './review/cache';
 import { createClaudeClient } from './review/claude';
 import { createReviewService } from './review/service';
 import { createSettings } from './settings/settings';
@@ -42,7 +43,16 @@ async function createServices(): Promise<void> {
   const chunkBudget = !app.isPackaged
     ? Number(process.env.PR_LENS_CHUNK_BUDGET) || undefined
     : undefined;
-  const review = createReviewService({ github, claude, settings, sandboxDir, emit, chunkBudget });
+  const cache = createAnalysisCache(store);
+  const review = createReviewService({
+    github,
+    claude,
+    settings,
+    sandboxDir,
+    emit,
+    cache,
+    chunkBudget,
+  });
   registerIpc(
     { toolchain, github, claude, settings, review, notes: createNotes(store) },
     isTrustedSender,
