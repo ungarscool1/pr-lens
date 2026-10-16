@@ -38,7 +38,11 @@ async function createServices(): Promise<void> {
   const github = createGhClient(execFileRunner, toolchain);
   const claude = createClaudeClient(execFileRunner, toolchain, () => settings.oauthToken());
   const emit = (e: ReviewEvent): void => win?.webContents.send(REVIEW_EVENT_CHANNEL, e);
-  const review = createReviewService({ github, claude, settings, sandboxDir, emit });
+  // Dev-only knob to exercise chunking on mid-size PRs; packaged builds ignore it.
+  const chunkBudget = !app.isPackaged
+    ? Number(process.env.PR_LENS_CHUNK_BUDGET) || undefined
+    : undefined;
+  const review = createReviewService({ github, claude, settings, sandboxDir, emit, chunkBudget });
   registerIpc(
     { toolchain, github, claude, settings, review, notes: createNotes(store) },
     isTrustedSender,

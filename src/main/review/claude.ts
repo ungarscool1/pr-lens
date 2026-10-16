@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../../shared/errors';
 import type { Health } from '../../shared/health';
-import { ModelOutput } from '../../shared/review';
+import { MergeOutput, ModelOutput } from '../../shared/review';
 import type { Usage } from '../../shared/review';
 import type { Exec } from '../exec/exec';
 import { claudeEnv, requireBin } from '../exec/toolchain';
@@ -17,19 +17,23 @@ export interface ClaudeRunRequest {
   signal: AbortSignal;
 }
 
-export interface ClaudeRunResult {
-  output: ModelOutput;
+export interface ClaudeRunResult<T> {
+  output: T;
   usage: Usage;
 }
 
 export interface ClaudeClient {
   health(): Promise<Health['claude']>;
-  review(req: ClaudeRunRequest): Promise<ClaudeRunResult>;
+  /** One chunk's review pass (review.v1). */
+  review(req: ClaudeRunRequest): Promise<ClaudeRunResult<ModelOutput>>;
+  /** The merge pass over validated chunk candidates (merge.v1). */
+  merge(req: ClaudeRunRequest): Promise<ClaudeRunResult<MergeOutput>>;
 }
 
-export const REVIEW_JSON_SCHEMA = JSON.stringify(
-  z.toJSONSchema(ModelOutput, { target: 'draft-7' }),
-);
+const jsonSchemaOf = (schema: z.ZodType): string =>
+  JSON.stringify(z.toJSONSchema(schema, { target: 'draft-7' }));
+export const REVIEW_JSON_SCHEMA = jsonSchemaOf(ModelOutput);
+export const MERGE_JSON_SCHEMA = jsonSchemaOf(MergeOutput);
 
 const Envelope = z.object({
   is_error: z.boolean(),
@@ -49,7 +53,11 @@ const Envelope = z.object({
 const AuthStatus = z.object({ loggedIn: z.boolean(), authMethod: z.string().optional() });
 
 /** Flags for the automatic pass: no tools, no MCP, no settings, no session left behind. */
-export function reviewArgs(systemPrompt: string, model: string | null): string[] {
+export function reviewArgs(
+  systemPrompt: string,
+  model: string | null,
+  jsonSchema: string = REVIEW_JSON_SCHEMA,
+): string[] {
   return [
     '-p',
     '--system-prompt',
@@ -57,7 +65,7 @@ export function reviewArgs(systemPrompt: string, model: string | null): string[]
     '--output-format',
     'json',
     '--json-schema',
-    REVIEW_JSON_SCHEMA,
+    jsonSchema,
     '--tools',
     '',
     '--strict-mcp-config',
@@ -72,7 +80,7 @@ export function reviewArgs(systemPrompt: string, model: string | null): string[]
   ];
 }
 
-export function parseEnvelope(stdout: string): ClaudeRunResult {
+export function parseEnvelope<T>(stdout: string, schema: z.ZodType<T>): ClaudeRunResult<T> {
   let raw: unknown;
   try {
     raw = JSON.parse(stdout);
@@ -90,7 +98,7 @@ export function parseEnvelope(stdout: string): ClaudeRunResult {
       `Claude review failed: ${msg.slice(0, 200) || env.data.subtype || 'unknown error'}`,
     );
   }
-  const out = ModelOutput.safeParse(env.data.structured_output);
+  const out = schema.safeParse(env.data.structured_output);
   if (!out.success) throw new AppError('MODEL_BAD_JSON');
   const u = env.data.usage;
   return {
@@ -120,6 +128,38 @@ export function createClaudeClient(
   toolchain: ToolchainService,
   oauthToken: () => Promise<string | null>,
 ): ClaudeClient {
+  const structured = async <T>(
+    req: ClaudeRunRequest,
+    schema: z.ZodType<T>,
+    jsonSchema: string,
+  ): Promise<ClaudeRunResult<T>> => {
+    const tc = await toolchain.get();
+    const run = async (): Promise<ClaudeRunResult<T>> => {
+      const res = await exec({
+        file: requireBin(tc.claude, 'claude'),
+        args: reviewArgs(req.systemPrompt, req.model, jsonSchema),
+        cwd: req.cwd,
+        env: claudeEnv(tc, await oauthToken()),
+        input: req.prompt,
+        timeoutMs: req.timeoutMs,
+        signal: req.signal,
+      });
+      // An error envelope can come with a non-zero exit; let the envelope explain itself.
+      if (res.code !== 0 && !res.stdout.trim()) {
+        throw new AppError('MODEL_ERROR', `claude exited with code ${res.code}.`);
+      }
+      return parseEnvelope(res.stdout, schema);
+    };
+    try {
+      return await run();
+    } catch (err) {
+      // One retry for malformed output; everything else is final.
+      if (err instanceof AppError && err.code === 'MODEL_BAD_JSON' && !req.signal.aborted)
+        return run();
+      throw err;
+    }
+  };
+
   return {
     async health() {
       const tc = await toolchain.get();
@@ -155,32 +195,7 @@ export function createClaudeClient(
       };
     },
 
-    async review(req) {
-      const tc = await toolchain.get();
-      const run = async (): Promise<ClaudeRunResult> => {
-        const res = await exec({
-          file: requireBin(tc.claude, 'claude'),
-          args: reviewArgs(req.systemPrompt, req.model),
-          cwd: req.cwd,
-          env: claudeEnv(tc, await oauthToken()),
-          input: req.prompt,
-          timeoutMs: req.timeoutMs,
-          signal: req.signal,
-        });
-        // An error envelope can come with a non-zero exit; let the envelope explain itself.
-        if (res.code !== 0 && !res.stdout.trim()) {
-          throw new AppError('MODEL_ERROR', `claude exited with code ${res.code}.`);
-        }
-        return parseEnvelope(res.stdout);
-      };
-      try {
-        return await run();
-      } catch (err) {
-        // One retry for malformed output; everything else is final.
-        if (err instanceof AppError && err.code === 'MODEL_BAD_JSON' && !req.signal.aborted)
-          return run();
-        throw err;
-      }
-    },
+    review: (req) => structured(req, ModelOutput, REVIEW_JSON_SCHEMA),
+    merge: (req) => structured(req, MergeOutput, MERGE_JSON_SCHEMA),
   };
 }

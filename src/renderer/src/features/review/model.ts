@@ -40,6 +40,8 @@ export function toViewNotes(ai: readonly AiNote[], mine: readonly PrivateNote[])
   return [...aiSorted, ...me];
 }
 
+const isFileLevel = (n: ViewNote): boolean => n.source === 'ai' && n.fileLevel;
+
 export const passesFilter = (n: ViewNote, f: Filter): boolean =>
   f === 'all' || (f === 'high' ? n.source === 'ai' && n.severity === 'high' : n.source === 'me');
 
@@ -137,13 +139,17 @@ export function buildRows(
   const rows: Row[] = [];
   const after = (side: Side, num: number): void => {
     for (const n of notes) {
-      if (n.side === side && n.endLine === num)
+      if (!isFileLevel(n) && n.side === side && n.endLine === num)
         rows.push({ kind: 'note', key: `note-${n.id}`, note: n });
     }
     if (composer && composer.fid === file.fid && composer.side === side && composer.line === num) {
       rows.push({ kind: 'composer', key: 'composer' });
     }
   };
+
+  // File-level notes (no line could be anchored) sit above the first hunk.
+  for (const n of notes)
+    if (isFileLevel(n)) rows.push({ kind: 'note', key: `note-${n.id}`, note: n });
 
   file.hunks.forEach((h, hi) => {
     rows.push({ kind: 'hunk', key: `h${hi}`, header: h.header });
@@ -194,7 +200,7 @@ export function highlightedLines(
   const hl: Record<Side, Set<number>> = { LEFT: new Set(), RIGHT: new Set() };
   for (const n of notes) {
     const st = state[n.id];
-    if (st?.dismissed || st?.collapsed) continue;
+    if (st?.dismissed || st?.collapsed || isFileLevel(n)) continue;
     for (let i = n.startLine; i <= n.endLine; i++) hl[n.side].add(i);
   }
   return hl;

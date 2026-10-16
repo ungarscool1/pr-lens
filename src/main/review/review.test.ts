@@ -65,26 +65,121 @@ describe('validateModelOutput', () => {
   it('repairs padding, reversed spans and cross-file ends', () => {
     const { notes } = validateModelOutput(
       output([
-        note({ key: 'n1', anchor: { file: 'F4', start: 'F4-03', end: 'F4-03' } }),
-        note({ key: 'n2', anchor: { file: 'F5', start: 'F5-007', end: 'F5-005' } }),
-        note({ key: 'n3', anchor: { file: 'F5', start: 'F5-005', end: 'F4-001' } }),
+        note({
+          key: 'n1',
+          anchor: { file: 'F4', start: 'F4-03', end: 'F4-03' },
+          quote: 'new Map<string',
+        }),
+        note({
+          key: 'n2',
+          anchor: { file: 'F5', start: 'F5-007', end: 'F5-005' },
+          quote: '?? memo.get',
+        }),
+        note({
+          key: 'n3',
+          anchor: { file: 'F5', start: 'F5-005', end: 'F4-001' },
+          quote: '?? memo.get',
+        }),
       ]),
       diff,
     );
-    expect(notes.map((n) => [n.startLineId, n.endLineId, n.repaired])).toEqual([
-      ['F4-003', 'F4-003', true],
-      ['F5-005', 'F5-007', true],
-      ['F5-005', 'F5-005', true],
+    expect(notes.map((n) => [n.startLineId, n.endLineId, n.repaired, n.confidence])).toEqual([
+      ['F4-003', 'F4-003', true, 0.85],
+      ['F5-005', 'F5-007', true, 0.85],
+      ['F5-005', 'F5-005', true, 0.85],
     ]);
   });
 
-  it('drops notes anchored to lines that do not exist', () => {
+  it('finds an unknown start again by its quote', () => {
+    const { notes } = validateModelOutput(
+      output([
+        note({
+          anchor: { file: 'F5', start: 'F5-099', end: 'F5-099' },
+          quote: 'metrics.increment(',
+        }),
+      ]),
+      diff,
+    );
+    expect(notes[0]).toMatchObject({
+      startLineId: 'F5-010',
+      endLineId: 'F5-010',
+      startLine: 45,
+      repaired: true,
+    });
+  });
+
+  it('refuses to guess when the quote matches several lines', () => {
     const r = validateModelOutput(
-      output([note({ anchor: { file: 'F9', start: 'F9-001', end: 'F9-001' } })]),
+      output([note({ anchor: { file: 'F7', start: 'F7-001', end: 'F7-001' }, quote: 'session' })]),
       diff,
     );
     expect(r.notes).toEqual([]);
-    expect(r.dropped[0]).toMatchObject({ key: 'n1', reason: 'unknown line F9-001' });
+    expect(r.dropped[0]?.reason).toBe('unknown line F7-001, quote not found');
+  });
+
+  it('moves the start to the line in the span that holds the quote, or lowers confidence', () => {
+    const { notes } = validateModelOutput(
+      output([
+        note({
+          key: 'n1',
+          anchor: { file: 'F5', start: 'F5-005', end: 'F5-007' },
+          quote: 'memo.set(token',
+        }),
+        note({
+          key: 'n2',
+          anchor: { file: 'F5', start: 'F5-005', end: 'F5-005' },
+          quote: 'not on this line',
+        }),
+      ]),
+      diff,
+    );
+    expect(notes[0]).toMatchObject({ startLineId: 'F5-007', endLineId: 'F5-007', repaired: true });
+    expect(notes[1]).toMatchObject({ startLineId: 'F5-005', confidence: 0.65 });
+  });
+
+  it('keeps a note on a shown file as file-level when no line can be found', () => {
+    const { notes } = validateModelOutput(
+      output([
+        note({
+          anchor: { file: 'F4', start: 'F4-900', end: 'F4-900' },
+          quote: 'nothing like this',
+        }),
+      ]),
+      diff,
+    );
+    expect(notes[0]).toMatchObject({ fid: 'F4', fileLevel: true, startLine: 0, startLineId: '' });
+  });
+
+  it('truncates spans to 20 lines', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `+line ${i}`).join('\n');
+    const big = buildDiffModel(
+      `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -0,0 +1,30 @@\n${lines}\n`,
+      [],
+    );
+    const { notes } = validateModelOutput(
+      output([note({ anchor: { file: 'F1', start: 'F1-001', end: 'F1-030' }, quote: 'line 0' })]),
+      big,
+    );
+    expect(notes[0]).toMatchObject({
+      startLine: 1,
+      endLine: 20,
+      endLineId: 'F1-020',
+      repaired: true,
+    });
+  });
+
+  it('drops notes anchored to lines that do not exist in files it was not shown', () => {
+    const r = validateModelOutput(
+      output([
+        note({
+          anchor: { file: 'F3', start: 'F3-001', end: 'F3-001' },
+          quote: "lockfileVersion: '9.0'",
+        }),
+      ]),
+      diff,
+    );
+    expect(r.notes).toEqual([]);
+    expect(r.dropped[0]).toMatchObject({ key: 'n1' });
   });
 
   it('keeps only known files and completes the reading order', () => {
@@ -114,10 +209,10 @@ describe('rankNotes', () => {
 
   it('orders by score, drops weak lows and caps without cutting highs', () => {
     const notes = [
-      v({ id: 'ai-low-weak', severity: 'low', confidence: 0.3 }),
+      v({ id: 'ai-low-weak', severity: 'low', confidence: 0.3, startLine: 1, endLine: 1 }),
       v({ id: 'ai-med', severity: 'medium', confidence: 1, category: 'security' }),
-      v({ id: 'ai-high-a', severity: 'high', confidence: 0.3 }),
-      v({ id: 'ai-high-b', severity: 'high', confidence: 0.9 }),
+      v({ id: 'ai-high-a', severity: 'high', confidence: 0.3, startLine: 10, endLine: 10 }),
+      v({ id: 'ai-high-b', severity: 'high', confidence: 0.9, startLine: 20, endLine: 22 }),
     ];
     const { kept, cut } = rankNotes(notes, 2);
     expect(kept.map((n) => n.id)).toEqual(['ai-high-b', 'ai-high-a']);
@@ -125,6 +220,26 @@ describe('rankNotes', () => {
       ['ai-low-weak', 'low severity and low confidence'],
       ['ai-med', 'over the note cap'],
     ]);
+  });
+
+  it('merges notes on overlapping lines with the same category, keeping the stronger', () => {
+    const { kept, cut } = rankNotes(
+      [
+        v({ id: 'ai-a', confidence: 0.6, startLine: 40, endLine: 42 }),
+        v({ id: 'ai-b', confidence: 0.9, startLine: 42, endLine: 44 }),
+        v({ id: 'ai-c', confidence: 0.9, startLine: 42, endLine: 44, category: 'security' }),
+      ],
+      8,
+    );
+    expect(kept.map((n) => n.id)).toEqual(['ai-c', 'ai-b']);
+    expect(cut).toEqual([{ key: 'ai-a', title: 'Returns null now', reason: 'duplicate' }]);
+  });
+
+  it('never keeps more than the cap, highs first', () => {
+    const highs = Array.from({ length: 12 }, (_, i) =>
+      v({ id: `ai-h${i}`, startLine: i * 5 + 1, endLine: i * 5 + 1 }),
+    );
+    expect(rankNotes(highs, 10).kept).toHaveLength(10);
   });
 });
 

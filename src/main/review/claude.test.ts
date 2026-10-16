@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Exec, ExecRequest } from '../exec/exec';
 import type { ToolchainService } from '../exec/toolchain';
+import { ModelOutput } from '../../shared/review';
 import { createClaudeClient, parseEnvelope, reviewArgs } from './claude';
 
 const structured = { summary: 's', files: [], reading_order: [], notes: [] };
@@ -25,7 +26,7 @@ const toolchain: ToolchainService = {
 
 describe('parseEnvelope', () => {
   it('reads structured output and usage', () => {
-    const r = parseEnvelope(envelope({}));
+    const r = parseEnvelope(envelope({}), ModelOutput);
     expect(r.output).toEqual(structured);
     expect(r.usage).toEqual({
       inputTokens: 111,
@@ -44,7 +45,7 @@ describe('parseEnvelope', () => {
     ],
     [envelope({ is_error: true, result: 'Overloaded' }), 'MODEL_ERROR'],
   ])('maps %s to %s', (stdout, code) =>
-    expect(() => parseEnvelope(stdout)).toThrow(expect.objectContaining({ code })),
+    expect(() => parseEnvelope(stdout, ModelOutput)).toThrow(expect.objectContaining({ code })),
   );
 });
 

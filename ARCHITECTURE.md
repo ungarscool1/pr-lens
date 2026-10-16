@@ -43,18 +43,37 @@ renderer can match events that arrive before `review:start` has replied.
 ## Review pipeline (`src/main/review`)
 
 1. `gh pr view --json …` + `gh pr diff` → `diff/parse.ts` parses the unified diff, sorts files by
-   path, assigns `F1…Fn` and per-file line IDs `F1-001…`, and marks noise files by glob.
-2. `prompt.ts` builds the `review.v1` prompt: PR header, manifest of all files, diff of
-   reviewed files with line IDs. `secrets.ts` masks likely secrets and reports them.
-3. `claude.ts` runs `claude -p --output-format json --json-schema <ModelOutput>` with
-   `--tools ""`, `--strict-mcp-config`, `--setting-sources ""`, `--permission-mode dontAsk`,
-   `--no-session-persistence`, from an empty sandbox dir, prompt on stdin. The JSON Schema is
-   generated from the zod `ModelOutput` in `src/shared/review.ts`. One retry on bad JSON.
-4. `validate.ts` normalizes line IDs, drops notes anchored to unknown lines, repairs reversed
-   or cross-file spans, and resolves IDs to path / side / line numbers.
-5. `rank.ts` scores (severity × confidence × category weight), drops weak low notes, caps the
-   list without cutting a high note.
-6. `service.ts` runs jobs through a limiter (2 at a time) and keeps results in memory.
+   path, assigns `F1…Fn` (noise files included, so IDs never shift) and per-file line IDs
+   `F1-001…` counted across hunks, and marks noise files by glob.
+2. `plan.ts` sends the whole PR as one prompt if it fits the chunk budget (90k input tokens).
+   Otherwise `chunker.ts` plans chunks: source files stay with their tests, then files are
+   grouped by top-level directory and bin-packed largest first; a file over budget is split by
+   hunks. More than 8 chunks is refused with a clear message.
+3. `prompt.ts` builds each `review.v1` prompt: PR header, manifest of all files (`in-chunk`,
+   `other-chunk`, `noise:…`), the chunk's diff with line IDs, and the task (6 notes per chunk,
+   or the note cap for a single pass). It records which IDs it showed. `secrets.ts` masks
+   likely secrets first and reports them.
+4. `claude.ts` runs `claude -p --output-format json --json-schema <schema>` with `--tools ""`,
+   `--strict-mcp-config`, `--setting-sources ""`, `--permission-mode dontAsk`,
+   `--no-session-persistence`, from an empty sandbox dir, prompt on stdin. JSON Schemas are
+   generated from the zod `ModelOutput` / `MergeOutput` in `src/shared/review.ts`, and the
+   envelope is parsed with the same zod type. One retry on bad JSON.
+5. `validate.ts` checks each chunk's notes against the IDs that chunk was shown: normalizes
+   padding, finds an unknown start again by its quote (anchor file first, then every visible
+   file; ambiguous matches are not guessed), collapses unknown or cross-file ends, swaps
+   reversed spans, truncates spans to 20 lines, moves the start to the line that holds the
+   quote or lowers confidence by 0.2. A note on a shown file with no locatable line becomes
+   file-level; anything else is dropped with a reason.
+6. `merge.ts` (several chunks only): one `merge.v1` pass over the validated candidates
+   (`c2.n1`, resolved path:line, anchor line) and chunk summaries. It cannot invent anchors:
+   every final note cites candidate keys and inherits the first one's anchor. If the merge
+   pass fails, the candidates are kept and files/summary are combined by rule.
+7. `rank.ts` scores (severity × confidence × category weight), dedupes by identity and by
+   overlapping lines with the same category, drops weak low notes, and caps the list (highs
+   first, so a high is never cut for a lower note).
+8. `pipeline.ts` runs all of this; `service.ts` owns jobs, cancel and the shared limiter
+   (at most 2 `claude` processes at once, chunks included). A failed chunk makes the
+   analysis partial; only all chunks failing fails the job.
 
 ## Storage
 
@@ -71,12 +90,11 @@ diff and severity tokens, and a dark theme derived from the system ramps. `ds/` 
 React wrappers over the design-system classes. `features/review/model.ts` holds the pure view
 logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
 
-## Not in phase 1
+## Later phases
 
-| Phase | Adds                                                                                                                               |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 2     | Quote-based anchor repair, span limits, chunking big PRs by file/hunk + merge pass. Today PRs over ~150k input tokens are refused. |
-| 3     | On-disk cache per (repo, PR, head SHA); "cached" badge. Today results live for the session only.                                   |
-| 4     | Compare view (branch / tag / SHA, two-dot vs three-dot), release summary.                                                          |
-| 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal.                                              |
-| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.                                                      |
+| Phase | Adds                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------ |
+| 3     | On-disk cache per (repo, PR, head SHA); "cached" badge. Today results live for the session only. |
+| 4     | Compare view (branch / tag / SHA, two-dot vs three-dot), release summary.                        |
+| 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal.            |
+| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.                    |

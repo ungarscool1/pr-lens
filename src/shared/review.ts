@@ -73,6 +73,36 @@ export const ModelOutput = z
 export type ModelOutput = z.infer<typeof ModelOutput>;
 export type ModelNote = ModelOutput['notes'][number];
 
+export const MERGE_PROMPT_VERSION = 'merge.v1';
+
+/**
+ * Big PRs: what the merge pass returns. It never invents anchors: every final note cites
+ * the candidate keys (`c2.n1`) it combines and inherits the first one's anchor.
+ */
+export const MergeOutput = z
+  .object({
+    summary: ModelOutput.shape.summary,
+    files: ModelOutput.shape.files,
+    reading_order: ModelOutput.shape.reading_order,
+    notes: z
+      .array(
+        z
+          .object({
+            from: z.array(z.string().regex(/^c[0-9]+\.n[0-9]+$/i)).min(1),
+            severity: Severity,
+            category: Category,
+            title: z.string().max(90),
+            explanation: z.string().max(900),
+            question: z.string().max(280).optional(),
+            confidence: z.number().min(0).max(1),
+          })
+          .strict(),
+      )
+      .max(10),
+  })
+  .strict();
+export type MergeOutput = z.infer<typeof MergeOutput>;
+
 /** A model note after its line IDs were checked and resolved to real lines. */
 export interface AiNote {
   id: string;
@@ -80,10 +110,14 @@ export interface AiNote {
   fid: string;
   path: string;
   side: Side;
+  /** Empty for file-level notes. */
   startLineId: string;
   endLineId: string;
+  /** 0 for file-level notes. */
   startLine: number;
   endLine: number;
+  /** The model named a shown file but no line in it that could be found. */
+  fileLevel: boolean;
   severity: Severity;
   category: Category;
   title: string;
@@ -130,13 +164,20 @@ export interface Analysis {
   dropped: DroppedNote[];
   usage: Usage;
   chunks: number;
+  /** Chunks whose review failed; their files have no AI notes. */
+  failedChunks: number;
+  /** How chunk results were combined: not needed, by the merge model pass, or by rules after it failed. */
+  merge: 'none' | 'model' | 'fallback';
   redactions: SecretFinding[];
   createdAt: number;
 }
 
 export interface Estimate {
   inputTokens: number;
+  chunks: number;
   secrets: SecretFinding[];
+  /** Why this PR cannot be reviewed as is (too many chunks), or null. */
+  blocked: string | null;
 }
 
 /** Every event names its target, so the renderer can match it before `start` has replied. */

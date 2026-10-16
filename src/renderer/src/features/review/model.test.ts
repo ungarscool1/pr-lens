@@ -25,6 +25,7 @@ const ai = (id: string, score: number, over: Partial<AiNote> = {}): AiNote => ({
   confidence: 1,
   score,
   repaired: false,
+  fileLevel: false,
   ...over,
 });
 const mine: PrivateNote = {
@@ -90,6 +91,20 @@ describe('buildRows', () => {
     const fifth = pairs[4];
     expect(fifth?.kind === 'pair' && [fifth.left, fifth.right?.line.id]).toEqual([null, 'F5-007']);
     expect(rows[rows.findIndex((r) => r.key === fifth?.key) + 1]?.kind).toBe('composer');
+  });
+
+  it('puts file-level notes above the first hunk and does not highlight them', () => {
+    const fl = ai('ai-file', 2, {
+      fileLevel: true,
+      startLine: 0,
+      endLine: 0,
+      startLineId: '',
+      endLineId: '',
+    });
+    const rows = buildRows(file, toViewNotes([fl], []), 'unified', null);
+    expect(rows[0]).toMatchObject({ kind: 'note', key: 'note-ai-file' });
+    expect(rows.filter((r) => r.kind === 'note')).toHaveLength(1);
+    expect(highlightedLines(toViewNotes([fl], []), {}).RIGHT.size).toBe(0);
   });
 
   it('marks the changed span of a modified line', () => {

@@ -104,7 +104,8 @@ export function Sidebar(p: Props) {
                   </span>
                   <span className="side-sub">
                     <span className={`sev-dot sev-${sev}`} aria-hidden="true" />
-                    {baseName(n.path)}:{n.startLine}
+                    {baseName(n.path)}
+                    {n.source === 'ai' && n.fileLevel ? '' : `:${n.startLine}`}
                     {n.source === 'me' ? ' · private' : ''}
                   </span>
                 </span>
@@ -146,7 +147,10 @@ export function Sidebar(p: Props) {
                 {k(p.analysis.usage.inputTokens)} in · {k(p.analysis.usage.outputTokens)} out
               </dd>
               <dt>chunks</dt>
-              <dd>{p.analysis.chunks} · no merge pass</dd>
+              <dd>
+                {p.analysis.chunks} · {MERGE_LABEL[p.analysis.merge]}
+                {p.analysis.failedChunks ? ` · ${p.analysis.failedChunks} failed` : ''}
+              </dd>
               <dt>dropped</dt>
               <dd>
                 {p.analysis.dropped.length}
@@ -155,6 +159,24 @@ export function Sidebar(p: Props) {
             </>
           )}
         </dl>
+        {p.analysis && p.analysis.failedChunks > 0 && (
+          <p className="analysis-warn">
+            Partial review: {p.analysis.failedChunks} of {p.analysis.chunks} chunks failed, so some
+            files have no AI notes. Re-run to try again.
+          </p>
+        )}
+        {p.analysis && p.analysis.dropped.length > 0 && (
+          <details className="dropped">
+            <summary>Dropped notes</summary>
+            <ul>
+              {p.analysis.dropped.map((d, i) => (
+                <li key={`${d.key}-${i}`}>
+                  <b>{d.key}</b> {d.title} <span>· {d.reason}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {p.estimate.secrets.length > 0 && (
           <p className="analysis-warn">
             {p.estimate.secrets.length} likely secret{p.estimate.secrets.length > 1 ? 's' : ''} (
@@ -162,13 +184,28 @@ export function Sidebar(p: Props) {
             sending.
           </p>
         )}
-        <button className="btn btn-secondary" onClick={p.onRerun} disabled={p.job !== null}>
+        <button
+          className="btn btn-secondary"
+          onClick={p.onRerun}
+          disabled={p.job !== null || p.estimate.blocked !== null}
+          title={p.estimate.blocked ?? undefined}
+        >
           {p.analysis ? 'Re-run review' : 'Run review'}
-          <span className="btn-hint">~{k(p.estimate.inputTokens)} tokens</span>
+          <span className="btn-hint">
+            {p.estimate.blocked
+              ? 'too large'
+              : `~${k(p.estimate.inputTokens)} tokens${p.estimate.chunks > 1 ? ` · ${p.estimate.chunks} chunks` : ''}`}
+          </span>
         </button>
       </div>
     </aside>
   );
 }
+
+const MERGE_LABEL = {
+  none: 'no merge pass',
+  model: 'merge pass',
+  fallback: 'merged by rules',
+} as const;
 
 const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);

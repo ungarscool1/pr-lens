@@ -4,7 +4,7 @@ A private, local review layer for GitHub pull requests. Paste a PR link, PR Lens
 through your own `gh`, runs one read-only pass through your own `claude` CLI, and overlays a
 few ranked attention points on a GitHub-style diff. Notes stay on your machine.
 
-Status: **phase 1 (MVP)**. See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
+Status: **phase 2** (MVP plus line-ID anchoring and chunked reviews of big PRs). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
 and what later phases add.
 
 ## Requirements
@@ -82,13 +82,25 @@ pnpm typecheck
 ```
 
 `pnpm format` runs Prettier. Tests cover the pure logic (diff parsing, line IDs, noise globs,
-note validation and ranking, secret redaction, CLI envelope parsing, binary resolution).
+chunk planning, note validation and repair, merge and ranking, secret redaction, CLI envelope
+parsing, binary resolution) and the review pipeline against a fake `claude`.
+
+A live smoke test runs the real pipeline (`gh` + `claude`, no window) and costs real tokens,
+so it is skipped unless asked for. `PR_LENS_LIVE_BUDGET` lowers the chunk budget to force
+chunking on a mid-size PR:
+
+```bash
+PR_LENS_LIVE=1 PR_LENS_LIVE_PR='cli/cli#14104' PR_LENS_LIVE_BUDGET=30000 pnpm test pipeline.live
+```
+
+In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored in packaged builds).
 
 ## What leaves your machine
 
 - `gh` calls to GitHub, with your `gh` login. Read-only: `gh pr view`, `gh pr diff`, `gh issue view`.
 - One `claude -p` call per review with the PR title, description, linked issues and the diff of
-  non-noise files. Likely secrets are masked first and listed in the sidebar. The call runs with
+  non-noise files. PRs over about 90k input tokens are split into up to 8 chunks, reviewed two
+  at a time, plus one merge call over the resulting notes. Likely secrets are masked first and listed in the sidebar. The call runs with
   no tools, no MCP servers, no settings files and an allow-listed environment
   (`ANTHROPIC_API_KEY` and GitHub tokens are never passed).
 

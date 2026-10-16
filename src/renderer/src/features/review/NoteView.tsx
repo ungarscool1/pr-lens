@@ -72,7 +72,9 @@ function NoteCard({
   const isAi = n.source === 'ai';
   const titleId = `${noteDomId(n.id)}-title`;
   const loc = isAi
-    ? `${n.startLineId === n.endLineId ? n.startLineId : `${n.startLineId}–${n.endLineId}`} · line ${lineRange(n)}`
+    ? n.fileLevel
+      ? 'file-level'
+      : `${n.startLineId === n.endLineId ? n.startLineId : `${n.startLineId}–${n.endLineId}`} · line ${lineRange(n)}`
     : `${n.lineId} · line ${lineRange(n)}`;
 
   const copy = (q: string): void => {

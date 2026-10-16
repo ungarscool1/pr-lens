@@ -15,9 +15,20 @@ export const scoreNote = (n: Pick<ValidNote, 'severity' | 'confidence' | 'catego
     SEVERITY_WEIGHT[n.severity] * n.confidence * (CATEGORY_WEIGHT[n.category] ?? 1) * 100,
   ) / 100;
 
+/** Same file, side and category, and the line ranges touch: two chunks (or two notes) saw one issue. */
+const overlaps = (a: AiNote, b: AiNote): boolean =>
+  !a.fileLevel &&
+  !b.fileLevel &&
+  a.fid === b.fid &&
+  a.side === b.side &&
+  a.category === b.category &&
+  a.startLine <= b.endLine &&
+  b.startLine <= a.endLine;
+
 /**
- * Scores, de-duplicates by identity, drops weak low-severity notes and caps the list.
- * A high note is never cut to make room for a lower one.
+ * Scores, de-duplicates (same identity, or overlapping lines with the same category), drops
+ * weak low-severity notes and caps the list. Highs are kept first, so a high note is never
+ * cut to make room for a lower one.
  */
 export function rankNotes(
   notes: readonly ValidNote[],
@@ -36,13 +47,15 @@ export function rankNotes(
     if (!prev || prev.score < scored.score) byId.set(n.id, scored);
   }
 
-  const ordered = [...byId.values()].sort((a, b) => b.score - a.score);
+  const ordered: AiNote[] = [];
+  for (const n of [...byId.values()].sort((a, b) => b.score - a.score)) {
+    if (ordered.some((k) => overlaps(k, n)))
+      cut.push({ key: n.id, title: n.title, reason: 'duplicate' });
+    else ordered.push(n);
+  }
   const highs = ordered.filter((n) => n.severity === 'high');
   const keep = new Set(
-    [...highs, ...ordered.filter((n) => n.severity !== 'high')].slice(
-      0,
-      Math.max(maxNotes, highs.length),
-    ),
+    [...highs, ...ordered.filter((n) => n.severity !== 'high')].slice(0, maxNotes),
   );
   for (const n of ordered)
     if (!keep.has(n)) cut.push({ key: n.id, title: n.title, reason: 'over the note cap' });

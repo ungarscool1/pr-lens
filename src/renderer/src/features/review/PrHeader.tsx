@@ -110,10 +110,16 @@ export function PrHeader({ pr, analysis, job, jobError, stats, onRun, onCancel }
             </>
           ) : analysis ? (
             <p>{analysis.summary}</p>
+          ) : pr.estimate.blocked ? (
+            <p>{pr.estimate.blocked}</p>
           ) : (
             <>
               <p>
-                Not reviewed yet. About {Math.round(pr.estimate.inputTokens / 1000)}k input tokens.
+                Not reviewed yet. About {Math.round(pr.estimate.inputTokens / 1000)}k input tokens
+                {pr.estimate.chunks > 1
+                  ? `, in ${pr.estimate.chunks} chunks plus a merge pass`
+                  : ''}
+                .
               </p>
               <div className="summary-actions">
                 <button className="btn btn-primary" onClick={onRun}>

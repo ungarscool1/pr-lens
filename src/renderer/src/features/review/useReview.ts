@@ -77,7 +77,12 @@ export function useReview(input: string, autoRunMaxTokens: number): ReviewState 
         setNotes(file);
         setAnalysis(pr.analysis);
         setLoad({ status: 'ready', pr });
-        if (!pr.analysis && autoRunBudget > 0 && pr.estimate.inputTokens <= autoRunBudget) {
+        if (
+          !pr.analysis &&
+          !pr.estimate.blocked &&
+          autoRunBudget > 0 &&
+          pr.estimate.inputTokens <= autoRunBudget
+        ) {
           startJob(pr.target.key, false);
         }
       } catch (e) {

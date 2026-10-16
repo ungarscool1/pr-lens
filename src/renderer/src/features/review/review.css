@@ -868,3 +868,26 @@ button.ref:hover {
   gap: 12px;
   align-items: center;
 }
+
+.dropped {
+  font-size: 12px;
+  color: var(--color-neutral-700);
+}
+.dropped summary {
+  cursor: pointer;
+  font: 11.5px var(--font-mono);
+}
+.dropped ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dropped b {
+  font: 500 11px var(--font-mono);
+  color: var(--color-accent-700);
+}
+.dropped span {
+  color: var(--color-neutral-600);
+}
