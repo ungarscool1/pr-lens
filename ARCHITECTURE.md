@@ -65,6 +65,24 @@ renderer can match events that arrive before `review:start` has replied.
 The embedded terminal from the design (xterm.js + node-pty) is not built: it needs a native
 module, which the MVP rules out.
 
+## Promote to comment (`src/main/promote`)
+
+`write-client.ts` is the only code that can mutate GitHub, and only `promote.ts` imports it.
+Off unless `promoteEnabled` is set (default false); every call checks it.
+
+1. `promote:preview` resolves the note, reads the PR through GraphQL (node ID, head, the
+   viewer's own pending review), refuses if the head moved since the review, and returns the
+   exact comment, line, side and account plus a single-use confirm token (2 minutes). It
+   writes nothing.
+2. `promote:confirm` consumes the token, checks the setting and the head again, starts a
+   pending review if the viewer has none (`addPullRequestReview` without an `event`, and the
+   result must come back `PENDING`), then adds the comment with `addPullRequestReviewThread`
+   (line or multi-line, or `subjectType: FILE` for file-level notes). The note is marked
+   promoted.
+
+Values go to `gh api graphql` with `-f` (raw strings, so a body starting with `@` is never
+read as a file) and `-F` only for line numbers.
+
 ## Subjects: PRs and compare ranges
 
 `src/shared/subject.ts`. Everything that is reviewed is a `Subject`: a PR (`owner/repo#n`) or a
@@ -148,8 +166,9 @@ diff and severity tokens, and a dark theme derived from the system ramps. `ds/` 
 React wrappers over the design-system classes. `features/review/model.ts` holds the pure view
 logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
 
-## Later phases
+## Not built
 
-| Phase | Adds                                                                          |
-| ----- | ----------------------------------------------------------------------------- |
-| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`. |
+- The embedded terminal (xterm.js + node-pty) from the design: it needs a native module, which
+  the MVP rules out. Ask Claude uses an external terminal instead.
+- Packaging into a signed `.app`, Linux and Windows support, and an Inbox view.
+- Pruning of cached analyses and session folders.

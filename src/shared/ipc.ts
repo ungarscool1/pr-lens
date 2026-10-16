@@ -26,6 +26,23 @@ export interface OpenResult {
   release: ReleaseSummary | null;
 }
 
+/** What "Promote to comment" would post; nothing is written until confirm. */
+export interface PromotePreview {
+  confirmToken: string;
+  pr: string;
+  headSha: string;
+  /** The gh account the comment would come from. */
+  viewer: string;
+  path: string;
+  side: 'LEFT' | 'RIGHT';
+  startLine: number;
+  endLine: number;
+  fileLevel: boolean;
+  /** A pending review exists and the comment joins it; otherwise one is started. */
+  pendingReviewExists: boolean;
+  body: string;
+}
+
 export const CompareInput = RepoRef.extend({
   base: GitRefName,
   head: GitRefName,
@@ -77,6 +94,16 @@ export const contract = {
   'deepDive:open': {
     input: z.object({ targetKey: TargetKey, noteId: NoteId }).strict(),
     output: z.custom<{ worktreePath: string; scriptPath: string; terminalApp: string }>(),
+  },
+  'promote:preview': {
+    input: z.object({ targetKey: TargetKey, noteId: NoteId }).strict(),
+    output: z.custom<PromotePreview>(),
+  },
+  'promote:confirm': {
+    input: z
+      .object({ confirmToken: z.string().uuid(), body: z.string().min(1).max(65_000) })
+      .strict(),
+    output: z.custom<{ url: string | null }>(),
   },
   'shell:openExternal': {
     input: z.object({ url: z.string().max(2000) }).strict(),

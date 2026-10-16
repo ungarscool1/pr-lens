@@ -10,13 +10,18 @@ interface Props {
   current: PrRef | null;
   view: View;
   health: Health | null;
+  /** Promote to comment is turned on. */
+  canComment: boolean;
   onOpen: (input: string) => void;
   onShowReview: () => void;
   onShowCompare: () => void;
   onShowSettings: () => void;
 }
 
-function healthLabel(h: Health | null): {
+function healthLabel(
+  h: Health | null,
+  canComment: boolean,
+): {
   claude: string;
   gh: string;
   claudeOk: boolean;
@@ -33,7 +38,13 @@ function healthLabel(h: Health | null): {
       : h.claude.path
         ? 'claude · not logged in'
         : 'claude · not found',
-    gh: ghOk ? 'gh · read-only' : h.gh.path ? 'gh · not logged in' : 'gh · not found',
+    gh: ghOk
+      ? canComment
+        ? 'gh · can comment'
+        : 'gh · read-only'
+      : h.gh.path
+        ? 'gh · not logged in'
+        : 'gh · not found',
     claudeOk,
     ghOk,
   };
@@ -43,6 +54,7 @@ export function Header({
   current,
   view,
   health,
+  canComment,
   onOpen,
   onShowReview,
   onShowCompare,
@@ -50,7 +62,7 @@ export function Header({
 }: Props) {
   const [value, setValue] = useState('');
   const [invalid, setInvalid] = useState(false);
-  const hl = healthLabel(health);
+  const hl = healthLabel(health, canComment);
 
   const submit = (): void => {
     if (!parsePrInput(value)) {

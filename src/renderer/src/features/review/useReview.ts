@@ -32,6 +32,8 @@ export interface ReviewState {
   notice: string | null;
   clearNotice(): void;
   notify(message: string): void;
+  /** Applies note state main already saved (e.g. promoted), without another write. */
+  setLocalNoteState(id: string, patch: NoteState): void;
   runReview(force: boolean): void;
   runRelease(force: boolean): void;
   cancelReview(): void;
@@ -208,6 +210,11 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
 
   const clearNotice = useCallback(() => setNotice(null), []);
   const notify = useCallback((m: string) => setNotice(m), []);
+  const setLocalNoteState = useCallback(
+    (id: string, patch: NoteState) =>
+      setNotes((f) => ({ ...f, state: { ...f.state, [id]: { ...f.state[id], ...patch } } })),
+    [],
+  );
 
   return {
     load,
@@ -220,6 +227,7 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     notice,
     clearNotice,
     notify,
+    setLocalNoteState,
     runReview,
     runRelease,
     cancelReview,

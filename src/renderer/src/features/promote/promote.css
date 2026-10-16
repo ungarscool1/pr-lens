@@ -1,0 +1,40 @@
+.promote-backdrop {
+  z-index: 50;
+}
+.promote-dialog {
+  width: min(560px, 100%);
+  background: var(--color-bg);
+  gap: 14px;
+}
+.promote-dialog .dialog-title {
+  font-size: 24px;
+}
+.promote-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 14px;
+  margin: 0;
+  font: 12.5px/1.5 var(--font-mono);
+}
+.promote-facts dt {
+  color: var(--color-neutral-600);
+}
+.promote-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.promote-dialog textarea {
+  min-height: 150px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.promote-help {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--color-neutral-800);
+}
+.promote-error {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--diff-del-mark);
+}

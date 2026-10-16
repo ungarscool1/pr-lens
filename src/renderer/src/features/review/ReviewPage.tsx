@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
-import type { OpenResult } from '../../../../shared/ipc';
+import type { OpenResult, PromotePreview } from '../../../../shared/ipc';
 import type { DiffMode } from '../../../../shared/subject';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, Seg } from '../../ds';
@@ -10,6 +10,7 @@ import { navigableNotes, passesFilter, stepNote, toViewNotes } from './model';
 import type { ComposerAt, Filter, ViewMode, ViewNote } from './model';
 import { noteDomId } from './NoteView';
 import type { RefTarget } from './NoteView';
+import { PromoteDialog } from '../promote/PromoteDialog';
 import { CompareHeader } from './CompareHeader';
 import { PrHeader } from './PrHeader';
 import { SummaryCard } from './SummaryCard';
@@ -26,11 +27,14 @@ export function ReviewPage({
   source,
   active,
   autoRunMaxTokens,
+  promoteEnabled,
   onMode,
 }: {
   source: Source;
   active: boolean;
   autoRunMaxTokens: number;
+  /** The opt-in setting for writing pending review comments. */
+  promoteEnabled: boolean;
   /** Compare only: switch between merge-base and direct diffs. */
   onMode?: (mode: DiffMode) => void;
 }) {
@@ -55,18 +59,28 @@ export function ReviewPage({
       </div>
     );
   }
-  return <LoadedReview open={load.open} review={review} active={active} onMode={onMode} />;
+  return (
+    <LoadedReview
+      open={load.open}
+      review={review}
+      active={active}
+      promoteEnabled={promoteEnabled}
+      onMode={onMode}
+    />
+  );
 }
 
 function LoadedReview({
   open,
   review,
   active,
+  promoteEnabled,
   onMode,
 }: {
   open: OpenResult;
   review: ReviewState;
   active: boolean;
+  promoteEnabled: boolean;
   onMode: ((mode: DiffMode) => void) | undefined;
 }) {
   const { analysis, notes: notesFile, patchNote, addNote, deleteNote } = review;
@@ -164,9 +178,48 @@ function LoadedReview({
     [askingNoteId, open.target.key, notify],
   );
 
+  const [promote, setPromote] = useState<{ preview: PromotePreview; noteId: string } | null>(null);
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
+  const promoteBlocked =
+    open.target.subject.kind !== 'pr'
+      ? 'Only notes on a pull request can become review comments'
+      : promoteEnabled
+        ? null
+        : 'Turn on Promote to comment in Settings first';
+  const { setLocalNoteState } = review;
+  const startPromote = useCallback(
+    (noteId: string) => {
+      setPromoteError(null);
+      run(api.promote.preview({ targetKey: open.target.key, noteId }))
+        .then((preview) => setPromote({ preview, noteId }))
+        .catch((e: unknown) => notify(errorMessage(e)));
+    },
+    [open.target.key, notify, setPromote, setPromoteError],
+  );
+  const confirmPromote = (body: string): void => {
+    if (!promote) return;
+    setPromoteBusy(true);
+    setPromoteError(null);
+    run(api.promote.confirm({ confirmToken: promote.preview.confirmToken, body }))
+      .then(() => {
+        setLocalNoteState(promote.noteId, { promoted: true });
+        setPromote(null);
+        notify(
+          'Added to your pending review on GitHub. Submit the review there when you are ready.',
+        );
+      })
+      // The token is single-use: a failed confirm closes nothing but needs a fresh preview.
+      .catch((e: unknown) => {
+        setPromoteError(`${errorMessage(e)} Close and try again.`);
+      })
+      .finally(() => setPromoteBusy(false));
+  };
+
   // Global review shortcuts, ignored while typing or while another view is shown.
   useEffect(() => {
-    if (!active) return;
+    // While the promote dialog is open it owns the keyboard.
+    if (!active || promote) return;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))
@@ -189,7 +242,7 @@ function LoadedReview({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
+  }, [active, promote, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
 
   const aiNotes = analysis?.notes ?? [];
   const stats = {
@@ -358,6 +411,8 @@ function LoadedReview({
                 onJumpRef={(id) => setScrollTo({ id, focus: false })}
                 onAskNote={askClaude}
                 askingNoteId={askingNoteId}
+                onPromoteNote={startPromote}
+                promoteBlocked={promoteBlocked}
               />
             ))}
             {noise.map((f) =>
@@ -383,6 +438,8 @@ function LoadedReview({
                   onJumpRef={(id) => setScrollTo({ id, focus: false })}
                   onAskNote={askClaude}
                   askingNoteId={askingNoteId}
+                  onPromoteNote={startPromote}
+                  promoteBlocked={promoteBlocked}
                 />
               ) : (
                 <section key={f.fid} className="noise-file" aria-label={`${f.path}, collapsed`}>
@@ -402,6 +459,15 @@ function LoadedReview({
             )}
           </div>
         </main>
+        {promote && (
+          <PromoteDialog
+            preview={promote.preview}
+            busy={promoteBusy}
+            error={promoteError}
+            onCancel={() => setPromote(null)}
+            onConfirm={confirmPromote}
+          />
+        )}
         {review.notice && (
           <div className="notice" role="alert">
             {review.notice}

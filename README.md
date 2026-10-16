@@ -4,9 +4,9 @@ A private, local review layer for GitHub pull requests. Paste a PR link, PR Lens
 through your own `gh`, runs one read-only pass through your own `claude` CLI, and overlays a
 few ranked attention points on a GitHub-style diff. Notes stay on your machine.
 
-Status: **phase 5** (MVP, line-ID anchoring and chunking, review cache, compare view, and
-Ask Claude deep dives). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
-and what later phases add.
+Status: **phase 6**: all planned phases (review, anchoring and chunking, cache, compare,
+Ask Claude, promote to comment). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
+and what is not built.
 
 ## Requirements
 
@@ -73,6 +73,12 @@ Settings) with an interactive `claude` in that worktree. The session starts in p
 `.mcp.json` never run) and uses your normal `claude` login. The first message is passed as the
 session's opening prompt; PR Lens never types into the session. macOS only for now.
 
+**Promote to comment** (off by default; turn it on in Settings): adds a note to **your pending
+review** on the PR through your `gh` login. You see and can edit the exact comment, line and
+account in a dialog first; nothing is posted without that confirmation, and nobody sees a
+pending review until you submit it on GitHub. Your `gh` token needs the `repo` scope
+(`gh auth refresh -s repo`); Settings shows whether it has it.
+
 Keyboard: `j` / `k` next and previous note, `s` mark seen, `d` dismiss, `a` ask Claude, and inside a diff
 `↑` / `↓` to move between lines and `Enter` to add a private note.
 
@@ -131,7 +137,7 @@ In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored i
 
 ## What leaves your machine
 
-- `gh` calls to GitHub, with your `gh` login. Read-only: `gh pr view`, `gh pr diff`, `gh issue view`,
+- `gh` calls to GitHub, with your `gh` login. Read-only unless you turn on Promote to comment: `gh pr view`, `gh pr diff`, `gh issue view`,
   and `gh api` for compares, commits and ref search.
 - Direct compares of diverged refs fetch just the two commits with `git` (shallow, file
   contents on demand) into the user-data directory, authenticated through `gh`.

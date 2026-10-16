@@ -41,6 +41,7 @@ export function App() {
         current={current}
         view={view}
         health={health}
+        canComment={settings?.promoteEnabled ?? false}
         onOpen={(input) => {
           setPrInput(input);
           setView('review');
@@ -74,6 +75,7 @@ export function App() {
               source={{ kind: 'pr', input: prInput }}
               active={view === 'review'}
               autoRunMaxTokens={settings.autoRunMaxTokens}
+              promoteEnabled={settings.promoteEnabled}
             />
           </div>
         )}
@@ -83,6 +85,7 @@ export function App() {
               defaultRepo={current ? { owner: current.owner, repo: current.repo } : null}
               active={view === 'compare'}
               autoRunMaxTokens={settings.autoRunMaxTokens}
+              promoteEnabled={settings.promoteEnabled}
             />
           </div>
         )}

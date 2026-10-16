@@ -41,6 +41,8 @@ const fields = {
   maxNotes: z.number().int().min(1).max(10),
   reviewTimeoutSec: z.number().int().min(30).max(3600),
   /** macOS app that opens Ask Claude sessions (`open -a <app> launch.command`). */
+  /** Off by default: lets "Promote to comment" add notes to your pending GitHub review. */
+  promoteEnabled: z.boolean(),
   terminalApp: z
     .string()
     .regex(/^(?!-)[A-Za-z0-9 ._-]{1,60}$/, 'An app name like Terminal or iTerm'),
@@ -55,6 +57,7 @@ export const Settings = z.object({
   maxNotes: fields.maxNotes.default(8),
   reviewTimeoutSec: fields.reviewTimeoutSec.default(600),
   terminalApp: fields.terminalApp.default('Terminal'),
+  promoteEnabled: fields.promoteEnabled.default(false),
 });
 export type Settings = z.infer<typeof Settings>;
 

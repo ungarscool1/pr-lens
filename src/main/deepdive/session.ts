@@ -1,21 +1,14 @@
 import type { DiffFile } from '../../shared/diff';
 import type { Header } from '../../shared/ipc';
 import type { Subject } from '../../shared/subject';
+import type { ResolvedNote } from '../notes/resolve';
 import { redactSecrets } from '../review/secrets';
 
-/** A note as the deep dive describes it, AI or private. */
-export interface DeepDiveNote {
-  /** `[high · security]` or `[private]`. */
-  label: string;
-  title: string;
-  body: string;
-  question?: string;
-  path: string;
-  side: 'LEFT' | 'RIGHT';
-  /** 0 for file-level notes. */
-  startLine: number;
-  endLine: number;
-}
+/** What the deep dive needs of a note. */
+export type DeepDiveNote = Pick<
+  ResolvedNote,
+  'label' | 'title' | 'body' | 'question' | 'path' | 'side' | 'startLine' | 'endLine'
+>;
 
 const sha7 = (s: string): string => s.slice(0, 7);
 

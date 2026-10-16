@@ -40,6 +40,7 @@ const api = {
     patchState: call('notes:patchState'),
   },
   deepDive: { open: call('deepDive:open') },
+  promote: { preview: call('promote:preview'), confirm: call('promote:confirm') },
   shell: { openExternal: call('shell:openExternal') },
 };
 

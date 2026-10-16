@@ -9,6 +9,7 @@ import type { ToolchainService } from '../exec/toolchain';
 import type { GitHubClient } from '../github/gh';
 import type { DeepDiveService } from '../deepdive/deepdive';
 import type { NotesService } from '../notes/notes';
+import type { PromoteService } from '../promote/promote';
 import type { ClaudeClient } from '../review/claude';
 import type { ReviewService } from '../review/service';
 import type { SettingsService } from '../settings/settings';
@@ -22,6 +23,7 @@ export interface Services {
   review: ReviewService;
   notes: NotesService;
   deepDive: DeepDiveService;
+  promote: PromoteService;
 }
 
 type Handler<C extends Channel> = (
@@ -82,6 +84,8 @@ export function registerIpc(
   handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));
   handle('notes:patchState', ({ subject, id, patch }) => s.notes.patchState(subject, id, patch));
   handle('deepDive:open', ({ targetKey, noteId }) => s.deepDive.open(targetKey, noteId));
+  handle('promote:preview', ({ targetKey, noteId }) => s.promote.preview(targetKey, noteId));
+  handle('promote:confirm', ({ confirmToken, body }) => s.promote.confirm(confirmToken, body));
   handle('shell:openExternal', async ({ url }) => {
     if (!isAllowedExternalUrl(url))
       throw new AppError('BAD_INPUT', 'That link is not on the allow-list.');

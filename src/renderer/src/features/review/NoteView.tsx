@@ -20,6 +20,9 @@ interface NoteProps {
   onAsk: () => void;
   /** An Ask Claude session for this note is being prepared. */
   asking: boolean;
+  onPromote: () => void;
+  /** Why promoting is not possible here (setting off, compare range), or null. */
+  promoteBlocked: string | null;
 }
 
 export const noteDomId = (id: string): string => `note-${id}`;
@@ -69,6 +72,8 @@ function NoteCard({
   onJumpRef,
   onAsk,
   asking,
+  onPromote,
+  promoteBlocked,
   sevKind,
   sevLabel,
   who,
@@ -167,8 +172,14 @@ function NoteCard({
         </button>
         <button
           className="btn btn-secondary"
-          disabled
-          title="Promote to comment arrives in phase 6"
+          onClick={onPromote}
+          disabled={promoteBlocked !== null || !!st.promoted}
+          title={
+            st.promoted
+              ? 'Already in your pending review'
+              : (promoteBlocked ??
+                'Add this note to your pending review on GitHub, after you confirm')
+          }
         >
           <Icon name="arrowUpRight" />
           Promote to comment

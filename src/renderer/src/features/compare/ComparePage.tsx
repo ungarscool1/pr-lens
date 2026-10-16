@@ -74,10 +74,12 @@ export function ComparePage({
   defaultRepo,
   active,
   autoRunMaxTokens,
+  promoteEnabled,
 }: {
   defaultRepo: RepoRef | null;
   active: boolean;
   autoRunMaxTokens: number;
+  promoteEnabled: boolean;
 }) {
   const [repoText, setRepoText] = useState(
     defaultRepo ? `${defaultRepo.owner}/${defaultRepo.repo}` : '',
@@ -164,6 +166,7 @@ export function ComparePage({
           source={source}
           active={active}
           autoRunMaxTokens={autoRunMaxTokens}
+          promoteEnabled={promoteEnabled}
           onMode={(m) => {
             setMode(m);
             setSource({ ...source, mode: m });

@@ -73,6 +73,17 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
       setMessage(errorMessage(e));
     }
   };
+  const canComment = !!health?.gh.scopes.some((s) => s === 'repo' || s === 'public_repo');
+  const togglePromote = async (on: boolean): Promise<void> => {
+    try {
+      onSettings(await run(api.settings.update({ promoteEnabled: on })));
+      setMessage(
+        on ? 'Promote to comment is on.' : 'Promote to comment is off. PR Lens is read-only again.',
+      );
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
   const recheck = async (): Promise<void> => {
     setChecking(true);
     await onRecheck();
@@ -205,6 +216,30 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
           </button>
         </div>
       </section>
+
+      <Blueprint as="section" className="settings-card" aria-labelledby="promote-h">
+        <h2 id="promote-h">Promote to comment</h2>
+        <p className="settings-help">
+          Off by default. When on, a note can be added to <b>your pending review</b> on GitHub,
+          through your gh login, after you confirm it in a dialog. Nothing is ever posted
+          automatically, and nobody sees a pending review until you submit it on GitHub.
+        </p>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={settings.promoteEnabled}
+            onChange={(e) => void togglePromote(e.target.checked)}
+          />
+          Allow PR Lens to add notes to my pending reviews
+        </label>
+        {health && (
+          <p className="settings-help">
+            {canComment
+              ? `gh can comment: token scopes include ${health.gh.scopes.filter((s) => s === 'repo' || s === 'public_repo').join(', ')}.`
+              : 'Your gh token has no repo scope, so GitHub will refuse comments. Run `gh auth refresh -s repo` in a terminal, then re-check.'}
+          </p>
+        )}
+      </Blueprint>
 
       <Blueprint as="section" className="settings-card" aria-labelledby="token-h">
         <h2 id="token-h">Claude OAuth token (optional)</h2>
