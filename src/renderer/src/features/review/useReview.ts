@@ -31,6 +31,7 @@ export interface ReviewState {
   notes: NotesFile;
   notice: string | null;
   clearNotice(): void;
+  notify(message: string): void;
   runReview(force: boolean): void;
   runRelease(force: boolean): void;
   cancelReview(): void;
@@ -206,6 +207,7 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
   );
 
   const clearNotice = useCallback(() => setNotice(null), []);
+  const notify = useCallback((m: string) => setNotice(m), []);
 
   return {
     load,
@@ -217,6 +219,7 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     notes,
     notice,
     clearNotice,
+    notify,
     runReview,
     runRelease,
     cancelReview,

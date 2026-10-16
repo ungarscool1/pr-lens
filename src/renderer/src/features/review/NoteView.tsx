@@ -17,6 +17,9 @@ interface NoteProps {
   onPatch: (patch: NoteState) => void;
   onDelete: () => void;
   onJumpRef: (domId: string) => void;
+  onAsk: () => void;
+  /** An Ask Claude session for this note is being prepared. */
+  asking: boolean;
 }
 
 export const noteDomId = (id: string): string => `note-${id}`;
@@ -64,6 +67,8 @@ function NoteCard({
   onPatch,
   onDelete,
   onJumpRef,
+  onAsk,
+  asking,
   sevKind,
   sevLabel,
   who,
@@ -151,9 +156,14 @@ function NoteCard({
         </div>
       )}
       <div className="note-actions">
-        <button className="btn btn-secondary" disabled title="Deep dive arrives in phase 5">
+        <button
+          className="btn btn-secondary"
+          onClick={onAsk}
+          disabled={asking}
+          title="Open an interactive claude session on this note in your terminal (a)"
+        >
           <Icon name="terminal" />
-          Ask Claude
+          {asking ? 'Preparing worktree…' : 'Ask Claude'}
         </button>
         <button
           className="btn btn-secondary"

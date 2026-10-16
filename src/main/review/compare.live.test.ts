@@ -33,7 +33,10 @@ describe.skipIf(!process.env.PR_LENS_LIVE)('live compare', () => {
     const claude: ClaudeClient = { health: unused, review: unused, merge: unused, release: unused };
     return createReviewService({
       github: createGhClient(execFileRunner, toolchain),
-      git: createGit(execFileRunner, toolchain, join(dir, 'git')),
+      git: createGit(execFileRunner, toolchain, {
+        repos: join(dir, 'git'),
+        worktrees: join(dir, 'wt'),
+      }),
       claude,
       settings: settingsService,
       sandboxDir: dir,

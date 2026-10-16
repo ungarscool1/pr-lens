@@ -14,6 +14,7 @@ import { CompareHeader } from './CompareHeader';
 import { PrHeader } from './PrHeader';
 import { SummaryCard } from './SummaryCard';
 import { Sidebar } from './Sidebar';
+import { api, errorMessage, run } from '../../lib/api';
 import { useReview } from './useReview';
 import type { ReviewState, Source } from './useReview';
 import './review.css';
@@ -147,6 +148,22 @@ function LoadedReview({
     setScrollTo({ id: fileDomId(fid), focus: false });
   };
 
+  const [askingNoteId, setAskingNoteId] = useState<string | null>(null);
+  const { notify } = review;
+  const askClaude = useCallback(
+    (noteId: string) => {
+      if (askingNoteId) return;
+      setAskingNoteId(noteId);
+      run(api.deepDive.open({ targetKey: open.target.key, noteId }))
+        .then((r) =>
+          notify(`Opened in ${r.terminalApp} · ${r.worktreePath.split('/').pop() ?? ''}`),
+        )
+        .catch((e: unknown) => notify(errorMessage(e)))
+        .finally(() => setAskingNoteId(null));
+    },
+    [askingNoteId, open.target.key, notify],
+  );
+
   // Global review shortcuts, ignored while typing or while another view is shown.
   useEffect(() => {
     if (!active) return;
@@ -161,6 +178,8 @@ function LoadedReview({
       } else if (e.key === 's' && cur) {
         const seen = !noteState[cur.id]?.seen;
         patchNote(cur.id, { seen, collapsed: seen });
+      } else if (e.key === 'a' && cur) {
+        askClaude(cur.id);
       } else if (e.key === 'd' && cur?.source === 'ai') {
         patchNote(cur.id, { dismissed: true });
         const next = stepNote(nav, current, 1);
@@ -170,7 +189,7 @@ function LoadedReview({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, nav, allNotes, current, noteState, jumpNote, patchNote]);
+  }, [active, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
 
   const aiNotes = analysis?.notes ?? [];
   const stats = {
@@ -337,6 +356,8 @@ function LoadedReview({
                 onDeleteNote={deleteNote}
                 resolveRef={resolveRef}
                 onJumpRef={(id) => setScrollTo({ id, focus: false })}
+                onAskNote={askClaude}
+                askingNoteId={askingNoteId}
               />
             ))}
             {noise.map((f) =>
@@ -360,6 +381,8 @@ function LoadedReview({
                   onDeleteNote={deleteNote}
                   resolveRef={resolveRef}
                   onJumpRef={(id) => setScrollTo({ id, focus: false })}
+                  onAskNote={askClaude}
+                  askingNoteId={askingNoteId}
                 />
               ) : (
                 <section key={f.fid} className="noise-file" aria-label={`${f.path}, collapsed`}>

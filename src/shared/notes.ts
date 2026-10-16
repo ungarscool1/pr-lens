@@ -11,11 +11,11 @@ export const NoteState = z
   .strict();
 export type NoteState = z.infer<typeof NoteState>;
 
-const NOTE_ID = z.string().regex(/^(ai|me)-[A-Za-z0-9_-]{4,64}$/);
+export const NoteId = z.string().regex(/^(ai|me)-[A-Za-z0-9_-]{4,64}$/);
 
 export const PrivateNote = z
   .object({
-    id: NOTE_ID,
+    id: NoteId,
     source: z.literal('me'),
     path: z.string().min(1).max(1000),
     side: z.enum(['LEFT', 'RIGHT']),
@@ -30,7 +30,7 @@ export type PrivateNote = z.infer<typeof PrivateNote>;
 /** Per-PR file on disk: private notes plus seen/dismissed state of any note. */
 export const NotesFile = z.object({
   mine: z.array(PrivateNote),
-  state: z.record(NOTE_ID, NoteState),
+  state: z.record(NoteId, NoteState),
 });
 export type NotesFile = z.infer<typeof NotesFile>;
 
@@ -39,8 +39,8 @@ export const CreateNoteInput = z
   .extend(PrivateNote.omit({ id: true, source: true, createdAt: true }).shape)
   .strict();
 
-export const DeleteNoteInput = z.object({ subject: Subject, id: NOTE_ID }).strict();
+export const DeleteNoteInput = z.object({ subject: Subject, id: NoteId }).strict();
 
 export const PatchNoteStateInput = z
-  .object({ subject: Subject, id: NOTE_ID, patch: NoteState })
+  .object({ subject: Subject, id: NoteId, patch: NoteState })
   .strict();

@@ -83,7 +83,13 @@ describe('git', () => {
       reset: () => undefined,
     };
     const dir = await mkdtemp(join(tmpdir(), 'pr-lens-git-'));
-    expect(await createGit(exec, tc, dir).directDiff({ owner: 'o', repo: 'r' }, A, B)).toBe('DIFF');
+    expect(
+      await createGit(exec, tc, { repos: dir, worktrees: join(dir, 'wt') }).directDiff(
+        { owner: 'o', repo: 'r' },
+        A,
+        B,
+      ),
+    ).toBe('DIFF');
     const fetch = calls.find((c) => c.args.includes('fetch'))!;
     expect(fetch.args).toEqual(
       expect.arrayContaining([
@@ -111,7 +117,10 @@ describe('git', () => {
       get: async () => ({ gh: null, claude: null, git: null, path: '' }),
       reset: () => undefined,
     };
-    const git = createGit(async () => ({ stdout: '', stderr: '', code: 0 }), tc, tmpdir());
+    const git = createGit(async () => ({ stdout: '', stderr: '', code: 0 }), tc, {
+      repos: tmpdir(),
+      worktrees: tmpdir(),
+    });
     expect(() => git.directDiff({ owner: 'o', repo: 'r' }, 'main', B)).toThrow();
     await expect(git.directDiff({ owner: 'o', repo: 'r' }, A, B)).rejects.toMatchObject({
       code: 'BIN_NOT_FOUND',
@@ -202,7 +211,10 @@ describe('review service: compare', () => {
       tagsAmong: async () => new Set(['v1', 'v2']),
       searchRefs: () => Promise.reject(new Error('unused')),
     };
-    const git = { directDiff: vi.fn(async () => SAMPLE_DIFF) };
+    const git = {
+      directDiff: vi.fn(async () => SAMPLE_DIFF),
+      worktree: () => Promise.reject(new Error('unused')),
+    };
     const release = vi.fn(async () => ({
       output: {
         headline: 'Big release',

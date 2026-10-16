@@ -47,6 +47,7 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
   const [globs, setGlobs] = useState(settings.noiseGlobs.join('\n'));
   const [autoRun, setAutoRun] = useState(String(settings.autoRunMaxTokens));
   const [maxNotes, setMaxNotes] = useState(String(settings.maxNotes));
+  const [terminalApp, setTerminalApp] = useState(settings.terminalApp);
   const [token, setToken] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -62,6 +63,7 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
         .filter(Boolean),
       autoRunMaxTokens: Number(autoRun),
       maxNotes: Number(maxNotes),
+      terminalApp: terminalApp.trim(),
     };
     try {
       onSettings(await run(api.settings.update(patch)));
@@ -173,6 +175,18 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
             max={10}
             value={maxNotes}
             onChange={(e) => setMaxNotes(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="terminal-app">
+            Terminal app for Ask Claude (macOS, must run .command files)
+          </label>
+          <input
+            id="terminal-app"
+            className="input mono"
+            value={terminalApp}
+            onChange={(e) => setTerminalApp(e.target.value)}
+            placeholder="Terminal"
           />
         </div>
         <div className="field wide">

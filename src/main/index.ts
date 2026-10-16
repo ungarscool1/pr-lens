@@ -7,6 +7,7 @@ import { REVIEW_EVENT_CHANNEL } from '../shared/ipc';
 import type { ReviewEvent } from '../shared/review';
 import { execFileRunner } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
+import { createDeepDive } from './deepdive/deepdive';
 import { createGit } from './git/git';
 import { createGhClient } from './github/gh';
 import { registerIpc } from './ipc/register';
@@ -45,9 +46,13 @@ async function createServices(): Promise<void> {
     ? Number(process.env.PR_LENS_CHUNK_BUDGET) || undefined
     : undefined;
   const cache = createAnalysisCache(store);
+  const git = createGit(execFileRunner, toolchain, {
+    repos: join(data, 'git'),
+    worktrees: join(data, 'worktrees'),
+  });
   const review = createReviewService({
     github,
-    git: createGit(execFileRunner, toolchain, join(data, 'git')),
+    git,
     claude,
     settings,
     sandboxDir,
@@ -55,10 +60,18 @@ async function createServices(): Promise<void> {
     cache,
     chunkBudget,
   });
-  registerIpc(
-    { toolchain, github, claude, settings, review, notes: createNotes(store) },
-    isTrustedSender,
-  );
+  const notes = createNotes(store);
+  const deepDive = createDeepDive({
+    exec: execFileRunner,
+    toolchain,
+    git,
+    review,
+    cache,
+    notes,
+    settings,
+    sessionsDir: join(data, 'sessions'),
+  });
+  registerIpc({ toolchain, github, claude, settings, review, notes, deepDive }, isTrustedSender);
 }
 
 function createWindow(): void {

@@ -130,6 +130,8 @@ export function Sidebar(p: Props) {
         <dd>mark seen</dd>
         <dt>d</dt>
         <dd>dismiss</dd>
+        <dt>a</dt>
+        <dd>ask Claude</dd>
         <dt>↑ ↓ ⏎</dt>
         <dd>move in diff / add note</dd>
       </dl>

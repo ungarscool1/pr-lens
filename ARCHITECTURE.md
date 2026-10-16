@@ -45,6 +45,26 @@ renderer can match events that arrive before `review:start` has replied.
   needs on demand. Credentials come from `gh auth git-credential`, never a prompt
   (`GIT_TERMINAL_PROMPT=0`).
 
+## Deep dive (`src/main/deepdive`)
+
+"Ask Claude" on a note:
+
+1. `git.worktree` fetches the head SHA into the bare cache repo and adds a detached worktree
+   under `userData/worktrees/<owner>__<repo>__pr<n>__<sha7>` (reused while its HEAD matches;
+   least recently used beyond 10 are removed).
+2. A session dir under `userData/sessions/` gets `pr.md` (note, description or commits, file
+   list, the note's file diff, secrets masked), `first-message.txt` and `launch.command`
+   (0700).
+3. `open -a <terminal app> launch.command`. The script `cd`s into the worktree, unsets
+   `ANTHROPIC_API_KEY` and `exec`s `claude --permission-mode plan --setting-sources user
+--strict-mcp-config --add-dir=<session dir> "$(cat first-message.txt)"`. Only paths PR Lens
+   chose are interpolated, single-quoted; PR text is read from a file at run time, so it can
+   never become shell code (covered by a test that runs the script with a stub `claude`).
+   Project settings and MCP config from the checked-out PR are excluded on purpose.
+
+The embedded terminal from the design (xterm.js + node-pty) is not built: it needs a native
+module, which the MVP rules out.
+
 ## Subjects: PRs and compare ranges
 
 `src/shared/subject.ts`. Everything that is reviewed is a `Subject`: a PR (`owner/repo#n`) or a
@@ -130,7 +150,6 @@ logic (note ordering, filters, row building, intra-line highlights) and is unit-
 
 ## Later phases
 
-| Phase | Adds                                                                                  |
-| ----- | ------------------------------------------------------------------------------------- |
-| 5     | "Ask Claude": worktree of the PR head + interactive `claude` in an external terminal. |
-| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`.         |
+| Phase | Adds                                                                          |
+| ----- | ----------------------------------------------------------------------------- |
+| 6     | "Promote to comment": opt-in, confirmed, pending review comment through `gh`. |

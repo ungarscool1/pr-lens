@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { DiffModel } from './diff';
 import type { Health } from './health';
-import { CreateNoteInput, DeleteNoteInput, PatchNoteStateInput } from './notes';
+import { CreateNoteInput, DeleteNoteInput, NoteId, PatchNoteStateInput } from './notes';
 import type { NotesFile, PrivateNote } from './notes';
 import { PrInput } from './pr';
 import type { PrMeta } from './pr';
@@ -74,6 +74,10 @@ export const contract = {
   'notes:create': { input: CreateNoteInput, output: z.custom<PrivateNote>() },
   'notes:delete': { input: DeleteNoteInput, output: z.custom<void>() },
   'notes:patchState': { input: PatchNoteStateInput, output: z.custom<void>() },
+  'deepDive:open': {
+    input: z.object({ targetKey: TargetKey, noteId: NoteId }).strict(),
+    output: z.custom<{ worktreePath: string; scriptPath: string; terminalApp: string }>(),
+  },
   'shell:openExternal': {
     input: z.object({ url: z.string().max(2000) }).strict(),
     output: z.custom<void>(),

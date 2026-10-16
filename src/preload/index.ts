@@ -39,6 +39,7 @@ const api = {
     delete: call('notes:delete'),
     patchState: call('notes:patchState'),
   },
+  deepDive: { open: call('deepDive:open') },
   shell: { openExternal: call('shell:openExternal') },
 };
 

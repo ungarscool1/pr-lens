@@ -144,7 +144,10 @@ describe('review service with the cache', () => {
     const events: ReviewEvent[] = [];
     const svc = createReviewService({
       github,
-      git: { directDiff: () => Promise.reject(new Error('unused')) },
+      git: {
+        directDiff: () => Promise.reject(new Error('unused')),
+        worktree: () => Promise.reject(new Error('unused')),
+      },
       claude,
       settings: settingsService(s),
       sandboxDir: '/tmp',

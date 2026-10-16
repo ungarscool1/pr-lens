@@ -4,8 +4,8 @@ A private, local review layer for GitHub pull requests. Paste a PR link, PR Lens
 through your own `gh`, runs one read-only pass through your own `claude` CLI, and overlays a
 few ranked attention points on a GitHub-style diff. Notes stay on your machine.
 
-Status: **phase 3** (MVP, line-ID anchoring, chunked reviews of big PRs, and an on-disk
-review cache). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
+Status: **phase 5** (MVP, line-ID anchoring and chunking, review cache, compare view, and
+Ask Claude deep dives). See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together
 and what later phases add.
 
 ## Requirements
@@ -14,7 +14,7 @@ and what later phases add.
 - Node.js 20+ and [pnpm](https://pnpm.io) 10+
 - [GitHub CLI](https://cli.github.com) (`gh`)
 - [Claude Code](https://code.claude.com) (`claude`)
-- `git`, only for direct (two-dot) compares of diverged refs. macOS ships it with the Command
+- `git`, for **Ask Claude** worktrees and direct (two-dot) compares of diverged refs. macOS ships it with the Command
   Line Tools (`xcode-select --install`); `brew install git` works too. No Xcode needed.
 
 ## Setup
@@ -65,7 +65,15 @@ The same review, notes and cache work on compare ranges. When base and head are 
 **Write release summary** groups what changed by area and, if the review ran, points at the
 notes to look at first.
 
-Keyboard: `j` / `k` next and previous note, `s` mark seen, `d` dismiss, and inside a diff
+**Ask Claude** (on any note, or `a`): PR Lens checks out the PR head in a detached worktree
+(shallow, cached, the 10 most recent kept), writes the note, description and the file's diff to
+a context file, and opens your terminal (Terminal by default; set another app such as iTerm in
+Settings) with an interactive `claude` in that worktree. The session starts in plan mode
+(read and explain, no edits), loads only your user settings (the PR's own `.claude/` hooks and
+`.mcp.json` never run) and uses your normal `claude` login. The first message is passed as the
+session's opening prompt; PR Lens never types into the session. macOS only for now.
+
+Keyboard: `j` / `k` next and previous note, `s` mark seen, `d` dismiss, `a` ask Claude, and inside a diff
 `↑` / `↓` to move between lines and `Enter` to add a private note.
 
 ## Build
@@ -111,6 +119,12 @@ The compare path (real `gh` and `git`, no `claude`, no tokens) has its own live 
 
 ```bash
 PR_LENS_LIVE=1 pnpm test compare.live
+```
+
+Deep-dive worktrees have one too (real `gh` and `git`, no terminal, no `claude`):
+
+```bash
+PR_LENS_LIVE=1 pnpm test deepdive.live
 ```
 
 In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored in packaged builds).

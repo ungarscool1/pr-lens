@@ -31,6 +31,8 @@ interface Props {
   onDeleteNote: (id: string) => void;
   resolveRef: (id: string) => RefTarget | null;
   onJumpRef: (domId: string) => void;
+  onAskNote: (id: string) => void;
+  askingNoteId: string | null;
 }
 
 const MARK = { add: '+', del: '−', ctx: '' } as const;
@@ -190,6 +192,8 @@ function DiffFileView(p: Props) {
             onJumpRef={p.onJumpRef}
             onPatch={(patch) => p.onPatchNote(r.note.id, patch)}
             onDelete={() => p.onDeleteNote(r.note.id)}
+            onAsk={() => p.onAskNote(r.note.id)}
+            asking={p.askingNoteId === r.note.id}
           />
         );
       case 'composer': {

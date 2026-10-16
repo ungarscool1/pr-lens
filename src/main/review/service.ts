@@ -26,6 +26,8 @@ export interface ReviewService {
   openCompare(input: CompareInput): Promise<OpenResult>;
   start(targetKey: string, force: boolean, kind: JobKind): { jobId: string };
   cancel(jobId: string): void;
+  /** A target opened in this session, for features that build on it (deep dive). */
+  loaded(targetKey: string): LoadedTarget | undefined;
 }
 
 interface Deps {
@@ -43,7 +45,7 @@ interface Deps {
 // At most this many claude processes at once, across every job (chunks included).
 const MAX_CONCURRENT_CLAUDE = 2;
 
-interface LoadedTarget {
+export interface LoadedTarget {
   target: Target;
   header: Header;
   context: PromptContext;
@@ -260,5 +262,7 @@ export function createReviewService(deps: Deps): ReviewService {
     cancel(jobId) {
       jobs.get(jobId)?.abort();
     },
+
+    loaded: (key) => targets.get(key),
   };
 }

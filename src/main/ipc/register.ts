@@ -7,6 +7,7 @@ import type { Channel, Output } from '../../shared/ipc';
 import type { z } from 'zod';
 import type { ToolchainService } from '../exec/toolchain';
 import type { GitHubClient } from '../github/gh';
+import type { DeepDiveService } from '../deepdive/deepdive';
 import type { NotesService } from '../notes/notes';
 import type { ClaudeClient } from '../review/claude';
 import type { ReviewService } from '../review/service';
@@ -20,6 +21,7 @@ export interface Services {
   settings: SettingsService;
   review: ReviewService;
   notes: NotesService;
+  deepDive: DeepDiveService;
 }
 
 type Handler<C extends Channel> = (
@@ -79,6 +81,7 @@ export function registerIpc(
   handle('notes:create', ({ subject, ...note }) => s.notes.create(subject, note));
   handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));
   handle('notes:patchState', ({ subject, id, patch }) => s.notes.patchState(subject, id, patch));
+  handle('deepDive:open', ({ targetKey, noteId }) => s.deepDive.open(targetKey, noteId));
   handle('shell:openExternal', async ({ url }) => {
     if (!isAllowedExternalUrl(url))
       throw new AppError('BAD_INPUT', 'That link is not on the allow-list.');
