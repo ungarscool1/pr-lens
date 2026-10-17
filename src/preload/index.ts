@@ -22,6 +22,7 @@ const api = {
   github: {
     openPr: call('github:openPr'),
     inbox: call('github:inbox'),
+    prContext: call('github:prContext'),
     openCompare: call('github:openCompare'),
     searchRefs: call('github:searchRefs'),
   },
@@ -34,6 +35,7 @@ const api = {
       return () => ipcRenderer.removeListener(reviewEvents, listener);
     },
   },
+  impact: { get: call('impact:get') },
   notes: {
     list: call('notes:list'),
     create: call('notes:create'),

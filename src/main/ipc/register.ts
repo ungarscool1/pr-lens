@@ -8,6 +8,7 @@ import type { z } from 'zod';
 import type { ToolchainService } from '../exec/toolchain';
 import type { GitHubClient } from '../github/gh';
 import type { DeepDiveService } from '../deepdive/deepdive';
+import type { ImpactService } from '../impact/service';
 import type { NotesService } from '../notes/notes';
 import type { PromoteService } from '../promote/promote';
 import type { ClaudeClient } from '../review/claude';
@@ -24,6 +25,7 @@ export interface Services {
   notes: NotesService;
   deepDive: DeepDiveService;
   promote: PromoteService;
+  impact: ImpactService;
 }
 
 type Handler<C extends Channel> = (
@@ -74,12 +76,14 @@ export function registerIpc(
   handle('settings:setOAuthToken', ({ token }) => s.settings.setOAuthToken(token));
   handle('github:openPr', ({ input }) => s.review.openPr(input));
   handle('github:inbox', () => s.github.inbox());
+  handle('github:prContext', ({ input }) => s.github.prContext(input));
   handle('github:openCompare', (input) => s.review.openCompare(input));
   handle('github:searchRefs', ({ owner, repo, query }) =>
     s.github.searchRefs({ owner, repo }, query),
   );
   handle('review:start', ({ targetKey, force, kind }) => s.review.start(targetKey, force, kind));
   handle('review:cancel', ({ jobId }) => s.review.cancel(jobId));
+  handle('impact:get', ({ targetKey }) => s.impact.get(targetKey));
   handle('notes:list', ({ subject }) => s.notes.list(subject));
   handle('notes:create', ({ subject, ...note }) => s.notes.create(subject, note));
   handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));

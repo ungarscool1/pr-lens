@@ -3,7 +3,7 @@ import type { DiffModel } from './diff';
 import type { Health } from './health';
 import { CreateNoteInput, DeleteNoteInput, NoteId, PatchNoteStateInput } from './notes';
 import type { NotesFile, PrivateNote } from './notes';
-import { PrInput } from './pr';
+import { PrInput, PrRef } from './pr';
 import type { PrMeta } from './pr';
 import type { Analysis, CacheInfo, Estimate, ReleaseSummary } from './review';
 import { DiffMode, GitRefName, RepoRef, Subject, TargetKey } from './subject';
@@ -11,6 +11,8 @@ import type { CompareMeta, RefSuggestion, Target } from './subject';
 import { OAuthTokenInput, SettingsPatch } from './settings';
 import type { SettingsView } from './settings';
 import type { Inbox } from './inbox';
+import type { ImpactMap } from './impact';
+import type { GitHubContext } from './github-context';
 
 export const ReviewDecision = z.enum(['APPROVE', 'COMMENT', 'REQUEST_CHANGES']);
 export type ReviewDecision = z.infer<typeof ReviewDecision>;
@@ -68,6 +70,10 @@ export const contract = {
     output: z.custom<OpenResult>(),
   },
   'github:inbox': { input: z.undefined(), output: z.custom<Inbox>() },
+  'github:prContext': {
+    input: z.object({ input: PrRef }).strict(),
+    output: z.custom<GitHubContext>(),
+  },
   'github:openCompare': { input: CompareInput, output: z.custom<OpenResult>() },
   'github:searchRefs': {
     input: RepoRef.extend({
@@ -91,6 +97,10 @@ export const contract = {
   'review:cancel': {
     input: z.object({ jobId: z.string().uuid() }).strict(),
     output: z.custom<void>(),
+  },
+  'impact:get': {
+    input: z.object({ targetKey: TargetKey }).strict(),
+    output: z.custom<ImpactMap>(),
   },
   'notes:list': { input: z.object({ subject: Subject }).strict(), output: z.custom<NotesFile>() },
   'notes:create': { input: CreateNoteInput, output: z.custom<PrivateNote>() },

@@ -141,6 +141,7 @@ describe('launch script', () => {
     ]);
     expect(argv.slice(6).join('\n')).toContain('Cache sessions $(touch PWNED) `id` "x"');
     expect(await readFile(join(dir, 'key.txt'), 'utf8')).toBe('unset');
+    await expect(stat(join(sessionDir, '.active'))).rejects.toThrow();
     await expect(stat(join(dir, 'PWNED'))).rejects.toThrow();
     await expect(stat(join(worktree, 'PWNED'))).rejects.toThrow();
   });
@@ -205,7 +206,12 @@ describe('deep dive service', () => {
         get: async () => ({ gh: '/gh', claude: '/bin/claude', git: '/git', path: '' }),
         reset: () => undefined,
       },
-      git: { directDiff: () => Promise.reject(new Error('unused')), worktree },
+      git: {
+        directDiff: () => Promise.reject(new Error('unused')),
+        worktree,
+        treePaths: () => Promise.reject(new Error('unused')),
+        sourceFiles: () => Promise.reject(new Error('unused')),
+      },
       review: { loaded: (k) => (k === loaded.target.key ? loaded : undefined) },
       cache: {
         get: async () => ({ analysis: analysis(), stale: false }),

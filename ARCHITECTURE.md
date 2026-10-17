@@ -54,9 +54,10 @@ renderer can match events that arrive before `review:start` has replied.
    least recently used beyond 10 are removed).
 2. A session dir under `userData/sessions/` gets `pr.md` (note, description or commits, file
    list, the note's file diff, secrets masked), `first-message.txt` and `launch.command`
-   (0700).
+   (0700). Completed session folders are retained for 14 days and capped at 30; a `.active`
+   marker protects a running terminal session from pruning.
 3. `open -a <terminal app> launch.command`. The script `cd`s into the worktree, unsets
-   `ANTHROPIC_API_KEY` and `exec`s `claude --permission-mode plan --setting-sources user
+   `ANTHROPIC_API_KEY` and runs `claude --permission-mode plan --setting-sources user
 --strict-mcp-config --add-dir=<session dir> "$(cat first-message.txt)"`. Only paths PR Lens
    chose are interpolated, single-quoted; PR text is read from a file at run time, so it can
    never become shell code (covered by a test that runs the script with a stub `claude`).
@@ -153,7 +154,8 @@ per file) under `app.getPath('userData')`, each read back through a zod schema.
   model, note cap and noise globs: a hit made with other settings is still shown, flagged
   stale, so a paid-for review is never discarded silently. Unreadable or older-version files
   are a miss (logged by error name only, never content). A new push means a new head SHA and
-  so a fresh review. There is no pruning yet.
+  so a fresh review. Cache heads are pruned by write time after 30 days and bounded to the 200
+  most recent entries; an analysis and its release summary are removed together.
 - **Private notes and note state** live in `notes/<subject slug>.json`: per PR, so they
   survive new pushes, and per SHA range for a compare. AI note IDs are a hash of path, category and anchor text, so
   seen/dismissed state carries over when a re-run finds the same thing.
@@ -175,6 +177,23 @@ wrappers over those classes. The diff uses blue additions and red deletions, wit
 and labels so the state is never conveyed by colour alone. `features/review/model.ts` holds the
 pure view logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
 
+### Function impact map
+
+The Review toolbar has an **Impact** mode. For the opened target, `src/main/impact` fetches a
+bounded set of TypeScript/TSX source files at the immutable head SHA through the existing
+authenticated, blobless Git cache—no worktree or GitHub write is needed. `analysis.ts` uses the
+TypeScript compiler API to find changed functions, same-file and relative-import direct calls,
+imports, and test files that import or call changed code. It returns only changed functions and
+their direct callers/callees, keeping the renderer map readable; every node, module and test links
+back to its diff file. Dynamic dispatch, path aliases and runtime wiring are reported as unresolved
+rather than guessed. The compiler API is bundled into the main process so packaged builds do not
+depend on development `node_modules`.
+
+For PRs, a separate read-only `github:prContext` call loads submitted review decisions, requested
+reviewers, unresolved review threads, the head commit's check rollup, and base-branch CODEOWNERS
+matched against changed files. Its GraphQL query is lazy and failure is isolated to the context
+panel, so a SAML-protected organization never prevents the diff from opening.
+
 ## Packaging and delivery
 
 `pnpm package:mac` first runs the Electron Vite production build, then `electron-builder`
@@ -192,4 +211,3 @@ macOS code-signing discovery, so the delivered app is unsigned and not notarized
 - The embedded terminal (xterm.js + node-pty) from the design: it needs a native module, which
   the MVP rules out. Ask Claude uses an external terminal instead.
 - macOS signing/notarization, Intel macOS builds, and Linux and Windows support.
-- Pruning of cached analyses and session folders.

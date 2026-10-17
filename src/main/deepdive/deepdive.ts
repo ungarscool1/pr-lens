@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AppError } from '../../shared/errors';
 import type { Exec } from '../exec/exec';
@@ -13,6 +13,10 @@ import type { ReviewService } from '../review/service';
 import { repoOf } from '../../shared/subject';
 import type { SettingsService } from '../settings/settings';
 import { contextMarkdown, firstMessage, launchScript, worktreeName } from './session';
+import { pruneDirectories } from '../storage/prune';
+
+export const SESSION_MAX_ENTRIES = 30;
+export const SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 export interface DeepDiveResult {
   worktreePath: string;
@@ -61,9 +65,23 @@ export function createDeepDive(d: Deps): DeepDiveService {
         worktreeName(subject, headSha),
       );
 
-      // ponytail: session dirs are never cleaned up (a few KB each); prune by age if they pile up.
+      // Preserve sessions while their terminal script is running; prune old completed ones first.
+      await pruneDirectories(d.sessionsDir, {
+        maxAgeMs: SESSION_MAX_AGE_MS,
+        maxEntries: SESSION_MAX_ENTRIES,
+        preserve: async (path) =>
+          stat(join(path, '.active')).then(
+            () => true,
+            () => false,
+          ),
+      }).catch((err) =>
+        console.warn('[sessions] could not prune:', err instanceof Error ? err.name : 'unknown error'),
+      );
       const sessionDir = join(d.sessionsDir, `${Date.now()}-${randomBytes(4).toString('hex')}`);
       await mkdir(sessionDir, { recursive: true, mode: 0o700 });
+      // Covers the gap before the terminal gets to launch.command. The script clears it on exit.
+      const activeMarker = join(sessionDir, '.active');
+      await writeFile(activeMarker, '', { mode: 0o600 });
       const contextPath = join(sessionDir, 'pr.md');
       const messageFile = join(sessionDir, 'first-message.txt');
       const scriptPath = join(sessionDir, 'launch.command');
@@ -93,6 +111,7 @@ export function createDeepDive(d: Deps): DeepDiveService {
         timeoutMs: 15_000,
       });
       if (r.code !== 0) {
+        await rm(activeMarker, { force: true });
         throw new AppError(
           'EXEC_FAILED',
           `Could not open ${terminalApp}. Run it yourself: sh ${scriptPath}`,

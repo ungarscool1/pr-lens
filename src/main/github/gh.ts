@@ -2,7 +2,14 @@ import { z } from 'zod';
 import { AppError } from '../../shared/errors';
 import type { BinHealth, Health } from '../../shared/health';
 import type { LinkedIssue, PrMeta, PrRef } from '../../shared/pr';
-import type { Inbox, InboxOrganization, InboxPullRequest, InboxReviewRequest } from '../../shared/inbox';
+import type { GitHubContext, GitHubRequestedReviewer } from '../../shared/github-context';
+import { resolveCodeowners } from './codeowners';
+import type {
+  Inbox,
+  InboxOrganization,
+  InboxPullRequest,
+  InboxReviewRequest,
+} from '../../shared/inbox';
 import type { CompareCommit, RefSuggestion, RepoRef } from '../../shared/subject';
 import type { Exec } from '../exec/exec';
 import { ghEnv, requireBin } from '../exec/toolchain';
@@ -13,6 +20,8 @@ export interface GitHubClient {
   prMeta(ref: PrRef): Promise<PrMeta>;
   /** Unified diff, three-dot (merge-base), exactly what GitHub shows. */
   prDiff(ref: PrRef): Promise<string>;
+  /** Read-only reviews, unresolved conversations and checks for an open PR. */
+  prContext(ref: PrRef): Promise<GitHubContext>;
   /** Branch, tag or SHA → full commit SHA. */
   resolveCommit(repo: RepoRef, ref: string): Promise<string>;
   compare(repo: RepoRef, baseSha: string, headSha: string): Promise<CompareInfo>;
@@ -143,6 +152,171 @@ const PrViewJson = z.object({
       repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
     }),
   ),
+});
+
+const PR_CONTEXT_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewRequests(first: 100) {
+        nodes {
+          requestedReviewer {
+            __typename
+            ... on User { login }
+            ... on Team { slug organization { login } }
+          }
+        }
+        pageInfo { hasNextPage }
+      }
+      reviews(first: 100) {
+        nodes { author { login } state submittedAt body url }
+        pageInfo { hasNextPage }
+      }
+      reviewThreads(first: 100) {
+        nodes {
+          isResolved isOutdated path line
+          comments(last: 1) { nodes { author { login } body createdAt url } }
+        }
+        pageInfo { hasNextPage }
+      }
+      files(first: 100) {
+        nodes { path }
+        pageInfo { hasNextPage }
+      }
+      baseRef {
+        target {
+          ... on Commit {
+            dotGitHubCodeowners: file(path: ".github/CODEOWNERS") { text }
+            rootCodeowners: file(path: "CODEOWNERS") { text }
+            docsCodeowners: file(path: "docs/CODEOWNERS") { text }
+          }
+        }
+      }
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  __typename
+                  ... on CheckRun { name status conclusion detailsUrl }
+                  ... on StatusContext { context state targetUrl }
+                }
+                pageInfo { hasNextPage }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const PageInfoJson = z.object({ hasNextPage: z.boolean() });
+const ActorJson = z.object({ login: z.string() }).nullable();
+const RequestedReviewerJson = z
+  .discriminatedUnion('__typename', [
+    z.object({ __typename: z.literal('User'), login: z.string() }),
+    z.object({
+      __typename: z.literal('Team'),
+      slug: z.string(),
+      organization: z.object({ login: z.string() }),
+    }),
+  ])
+  .nullable();
+const CodeownersFileJson = z.object({ text: z.string().nullable() }).nullable();
+const PrContextJson = z.object({
+  data: z.object({
+    repository: z.object({
+      pullRequest: z
+        .object({
+          reviewRequests: z.object({
+            nodes: z.array(z.object({ requestedReviewer: RequestedReviewerJson })),
+            pageInfo: PageInfoJson,
+          }),
+          reviews: z.object({
+            nodes: z.array(
+              z.object({
+                author: ActorJson,
+                state: z.string(),
+                submittedAt: z.string().nullable(),
+                body: z.string(),
+                url: z.string().url().nullable(),
+              }),
+            ),
+            pageInfo: PageInfoJson,
+          }),
+          reviewThreads: z.object({
+            nodes: z.array(
+              z.object({
+                isResolved: z.boolean(),
+                isOutdated: z.boolean(),
+                path: z.string().nullable(),
+                line: z.number().int().nullable(),
+                comments: z.object({
+                  nodes: z.array(
+                    z.object({
+                      author: ActorJson,
+                      body: z.string(),
+                      createdAt: z.string().nullable(),
+                      url: z.string().url().nullable(),
+                    }),
+                  ),
+                }),
+              }),
+            ),
+            pageInfo: PageInfoJson,
+          }),
+          files: z.object({
+            nodes: z.array(z.object({ path: z.string() })),
+            pageInfo: PageInfoJson,
+          }),
+          baseRef: z
+            .object({
+              target: z
+                .object({
+                  dotGitHubCodeowners: CodeownersFileJson.optional(),
+                  rootCodeowners: CodeownersFileJson.optional(),
+                  docsCodeowners: CodeownersFileJson.optional(),
+                })
+                .nullable(),
+            })
+            .nullable(),
+          commits: z.object({
+            nodes: z.array(
+              z.object({
+                commit: z.object({
+                  statusCheckRollup: z
+                    .object({
+                      contexts: z.object({
+                        nodes: z.array(
+                          z.discriminatedUnion('__typename', [
+                            z.object({
+                              __typename: z.literal('CheckRun'),
+                              name: z.string(),
+                              status: z.string(),
+                              conclusion: z.string().nullable(),
+                              detailsUrl: z.string().url().nullable(),
+                            }),
+                            z.object({
+                              __typename: z.literal('StatusContext'),
+                              context: z.string(),
+                              state: z.string(),
+                              targetUrl: z.string().url().nullable(),
+                            }),
+                          ]),
+                        ),
+                        pageInfo: PageInfoJson,
+                      }),
+                    })
+                    .nullable(),
+                }),
+              }),
+            ),
+          }),
+        })
+        .nullable(),
+    }),
+  }),
 });
 
 const IssueJson = z.object({
@@ -280,6 +454,88 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
 
     prDiff: (ref) =>
       gh(['pr', 'diff', String(ref.number), repoFlag(ref), '--color=never'], 120_000),
+
+    async prContext(ref) {
+      const out = await gh([
+        'api',
+        'graphql',
+        '-f',
+        `query=${PR_CONTEXT_QUERY}`,
+        '-f',
+        `owner=${ref.owner}`,
+        '-f',
+        `name=${ref.repo}`,
+        '-F',
+        `number=${ref.number}`,
+      ]);
+      const pr = PrContextJson.parse(JSON.parse(out)).data.repository.pullRequest;
+      if (!pr) throw new AppError('NOT_FOUND', 'Pull request not found.');
+      const rollup = pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts;
+      const base = pr.baseRef?.target;
+      const codeowners = [
+        ['.github/CODEOWNERS', base?.dotGitHubCodeowners?.text],
+        ['CODEOWNERS', base?.rootCodeowners?.text],
+        ['docs/CODEOWNERS', base?.docsCodeowners?.text],
+      ].find((entry): entry is [string, string] => typeof entry[1] === 'string');
+      return {
+        requestedReviewers: pr.reviewRequests.nodes.flatMap<GitHubRequestedReviewer>((request) => {
+          const reviewer = request.requestedReviewer;
+          if (!reviewer) return [];
+          return reviewer.__typename === 'User'
+            ? [{ kind: 'user' as const, handle: reviewer.login }]
+            : [{ kind: 'team' as const, handle: `${reviewer.organization.login}/${reviewer.slug}` }];
+        }),
+        ownership: resolveCodeowners(
+          codeowners?.[1] ?? null,
+          pr.files.nodes.map((file) => file.path),
+          codeowners?.[0] ?? null,
+        ),
+        reviews: pr.reviews.nodes
+          .filter((review) => review.state !== 'PENDING')
+          .map((review) => ({
+            author: review.author?.login ?? 'ghost',
+            state: review.state,
+            submittedAt: review.submittedAt,
+            body: review.body.slice(0, 1_000),
+            url: review.url,
+          })),
+        unresolvedThreads: pr.reviewThreads.nodes
+          .filter((thread) => !thread.isResolved)
+          .map((thread) => {
+            const comment = thread.comments.nodes[0];
+            return {
+              path: thread.path,
+              line: thread.line,
+              outdated: thread.isOutdated,
+              author: comment?.author?.login ?? 'ghost',
+              body: comment?.body.slice(0, 1_000) ?? '',
+              createdAt: comment?.createdAt ?? null,
+              url: comment?.url ?? null,
+            };
+          }),
+        checks: (rollup?.nodes ?? []).map((check) =>
+          check.__typename === 'CheckRun'
+            ? {
+                name: check.name,
+                status: check.status,
+                conclusion: check.conclusion,
+                detailsUrl: check.detailsUrl,
+              }
+            : {
+                name: check.context,
+                status: check.state,
+                conclusion: null,
+                detailsUrl: check.targetUrl,
+              },
+        ),
+        truncated:
+          pr.reviewRequests.pageInfo.hasNextPage ||
+          pr.reviews.pageInfo.hasNextPage ||
+          pr.reviewThreads.pageInfo.hasNextPage ||
+          pr.files.pageInfo.hasNextPage ||
+          (rollup?.pageInfo.hasNextPage ?? false),
+      };
+    },
 
     async resolveCommit(repo, ref) {
       try {
@@ -430,9 +686,7 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
             url: org.html_url ?? `https://github.com/${encodeURIComponent(org.login)}`,
           }))
         : [];
-      const authored = authoredSearch?.success
-        ? authoredSearch.data.items.map(asInboxPr)
-        : [];
+      const authored = authoredSearch?.success ? authoredSearch.data.items.map(asInboxPr) : [];
       const requested: InboxReviewRequest[] = requestedSearch?.success
         ? requestedSearch.data.items.map((pr) => ({
             ...asInboxPr(pr),

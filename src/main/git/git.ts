@@ -18,6 +18,14 @@ export interface GitService {
    * The least recently used ones beyond the limit are removed.
    */
   worktree(repo: RepoRef, sha: string, name: string): Promise<string>;
+  /** Lists tracked paths at one commit without checking them out. */
+  treePaths(repo: RepoRef, sha: string): Promise<string[]>;
+  /** Reads selected tracked text files at one commit, subject to caller-provided bounds. */
+  sourceFiles(
+    repo: RepoRef,
+    sha: string,
+    paths: string[],
+  ): Promise<{ path: string; text: string }[]>;
 }
 
 export interface GitDirs {
@@ -29,7 +37,10 @@ export interface GitDirs {
 
 const SHA = /^[0-9a-f]{40}$/;
 const NAME = /^[A-Za-z0-9._-]{1,200}$/;
+const TREE_PATH = /^(?!-)(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\0\r\n]+$/;
 export const MAX_WORKTREES = 10;
+const MAX_SOURCE_FILE_BYTES = 512 * 1024;
+const MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 
 /**
  * Credentials for private repos come from `gh auth git-credential`. git runs a `!` helper
@@ -184,5 +195,33 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
         return path;
       });
     },
+
+    treePaths: (repo, sha) =>
+      withRepo(repo, [sha], 'Impact map', async ({ run, bare }) => {
+        const output = await run(['-C', bare, 'ls-tree', '-r', '--name-only', '-z', sha], 120_000);
+        return output.split('\0').filter((path) => path && TREE_PATH.test(path));
+      }),
+
+    sourceFiles: (repo, sha, paths) =>
+      withRepo(repo, [sha], 'Impact map', async ({ run, bare }) => {
+        const sources: { path: string; text: string }[] = [];
+        let usedBytes = 0;
+        for (const path of [...new Set(paths)].filter((candidate) => TREE_PATH.test(candidate))) {
+          const object = `${sha}:${path}`;
+          const sizeText = await run(['-C', bare, 'cat-file', '-s', object], 20_000).catch(
+            () => '',
+          );
+          const size = Number(sizeText.trim());
+          if (!Number.isSafeInteger(size) || size < 0 || size > MAX_SOURCE_FILE_BYTES) continue;
+          if (usedBytes + size > MAX_SOURCE_BYTES) break;
+          const text = await run(['-C', bare, 'show', '--no-textconv', object], 60_000).catch(
+            () => null,
+          );
+          if (text === null) continue;
+          usedBytes += Buffer.byteLength(text);
+          sources.push({ path, text });
+        }
+        return sources;
+      }),
   };
 }

@@ -9,6 +9,7 @@ import { execFileRunner } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
 import { createDeepDive } from './deepdive/deepdive';
 import { createGit } from './git/git';
+import { createImpactService } from './impact/service';
 import { createPromote } from './promote/promote';
 import { createWriteClient } from './promote/write-client';
 import { createGhClient } from './github/gh';
@@ -47,7 +48,8 @@ async function createServices(): Promise<void> {
   const chunkBudget = !app.isPackaged
     ? Number(process.env.PR_LENS_CHUNK_BUDGET) || undefined
     : undefined;
-  const cache = createAnalysisCache(store);
+  const cache = createAnalysisCache(store, join(data, 'analyses'));
+  void cache.prune();
   const git = createGit(execFileRunner, toolchain, {
     repos: join(data, 'git'),
     worktrees: join(data, 'worktrees'),
@@ -73,6 +75,7 @@ async function createServices(): Promise<void> {
     settings,
     sessionsDir: join(data, 'sessions'),
   });
+  const impact = createImpactService(git, review);
   // The write client exists only for promote; nothing else can reach a GitHub mutation.
   const promote = createPromote({
     write: createWriteClient(execFileRunner, toolchain),
@@ -82,7 +85,7 @@ async function createServices(): Promise<void> {
     settings,
   });
   registerIpc(
-    { toolchain, github, claude, settings, review, notes, deepDive, promote },
+    { toolchain, github, claude, settings, review, notes, deepDive, promote, impact },
     isTrustedSender,
   );
 }

@@ -198,6 +198,7 @@ describe('review service: compare', () => {
       health: () => Promise.reject(new Error('unused')),
       prMeta: () => Promise.reject(new Error('unused')),
       prDiff: () => Promise.reject(new Error('unused')),
+      prContext: () => Promise.reject(new Error('unused')),
       resolveCommit: async (_r, ref) => (ref === 'v1' ? A : B),
       compare: async () => ({
         mergeBaseSha: A,
@@ -215,6 +216,8 @@ describe('review service: compare', () => {
     const git = {
       directDiff: vi.fn(async () => SAMPLE_DIFF),
       worktree: () => Promise.reject(new Error('unused')),
+      treePaths: () => Promise.reject(new Error('unused')),
+      sourceFiles: () => Promise.reject(new Error('unused')),
     };
     const release = vi.fn(async () => ({
       output: {

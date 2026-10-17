@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,11 @@ import { SAMPLE_DIFF } from '../diff/fixtures';
 import type { GitHubClient } from '../github/gh';
 import type { SettingsService } from '../settings/settings';
 import { createJsonStore } from '../store/json-store';
-import { createAnalysisCache, settingsKey } from './cache';
+import {
+  ANALYSIS_CACHE_MAX_AGE_MS,
+  createAnalysisCache,
+  settingsKey,
+} from './cache';
 import type { ClaudeClient } from './claude';
 import { createReviewService } from './service';
 
@@ -91,6 +95,27 @@ describe('createAnalysisCache', () => {
     const { store } = await tempStore();
     await expect(createAnalysisCache(store).get(ref, '../../etc', settings)).rejects.toThrow();
   });
+
+  it('prunes expired analysis heads together with their release summaries', async () => {
+    const { dir, store } = await tempStore();
+    const cache = createAnalysisCache(store, join(dir, 'analyses'));
+    const subjectDir = join(dir, 'analyses/acme__api__812');
+    const oldSha = 'a'.repeat(40);
+    const freshSha = 'b'.repeat(40);
+    await mkdir(subjectDir, { recursive: true });
+    const oldAnalysis = join(subjectDir, `${oldSha}.json`);
+    const oldRelease = join(subjectDir, `${oldSha}.release.json`);
+    const freshAnalysis = join(subjectDir, `${freshSha}.json`);
+    await Promise.all([writeFile(oldAnalysis, '{}'), writeFile(oldRelease, '{}'), writeFile(freshAnalysis, '{}')]);
+    const expired = new Date(Date.now() - ANALYSIS_CACHE_MAX_AGE_MS - 1_000);
+    await Promise.all([utimes(oldAnalysis, expired, expired), utimes(oldRelease, expired, expired)]);
+
+    await cache.prune();
+
+    await expect(stat(oldAnalysis)).rejects.toThrow();
+    await expect(stat(oldRelease)).rejects.toThrow();
+    await expect(stat(freshAnalysis)).resolves.toBeDefined();
+  });
 });
 
 describe('review service with the cache', () => {
@@ -112,6 +137,7 @@ describe('review service with the cache', () => {
     health: () => Promise.reject(new Error('unused')),
     prMeta: async () => meta,
     prDiff: async () => SAMPLE_DIFF,
+    prContext: () => Promise.reject(new Error('unused')),
     resolveCommit: () => Promise.reject(new Error('unused')),
     compare: () => Promise.reject(new Error('unused')),
     compareDiff: () => Promise.reject(new Error('unused')),
@@ -148,6 +174,8 @@ describe('review service with the cache', () => {
       git: {
         directDiff: () => Promise.reject(new Error('unused')),
         worktree: () => Promise.reject(new Error('unused')),
+        treePaths: () => Promise.reject(new Error('unused')),
+        sourceFiles: () => Promise.reject(new Error('unused')),
       },
       claude,
       settings: settingsService(s),

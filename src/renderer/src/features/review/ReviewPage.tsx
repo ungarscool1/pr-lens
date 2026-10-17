@@ -7,6 +7,8 @@ import type { DiffMode } from '../../../../shared/subject';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, Seg } from '../../ds';
 import { DiffFile, fileDomId, lineDomId } from './DiffFile';
+import { GitHubContext } from './GitHubContext';
+import { ImpactView } from './ImpactView';
 import { navigableNotes, passesFilter, stepNote, toViewNotes } from './model';
 import type { ComposerAt, Filter, ViewMode, ViewNote } from './model';
 import { noteDomId } from './NoteView';
@@ -22,6 +24,7 @@ import { useReview } from './useReview';
 import type { ReviewState, Source } from './useReview';
 
 type Density = 'comfortable' | 'compact';
+type ReviewContent = 'diff' | 'impact';
 
 const sourceLabel = (s: Source): string =>
   s.kind === 'pr' ? s.input : `${s.owner}/${s.repo} ${s.base} → ${s.head}`;
@@ -91,6 +94,7 @@ function LoadedReview({
   const [mode, setMode] = useState<ViewMode>('unified');
   const [filter, setFilter] = useState<Filter>('all');
   const [density, setDensity] = useState<Density>('comfortable');
+  const [content, setContent] = useState<ReviewContent>('diff');
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [viewed, setViewed] = useState<Record<string, boolean>>({});
   const [loadedNoise, setLoadedNoise] = useState<Record<string, boolean>>({});
@@ -173,6 +177,10 @@ function LoadedReview({
     setClosed((c) => ({ ...c, [fid]: false }));
     setScrollTo({ id: fileDomId(fid), focus: false });
   };
+  const jumpPath = (path: string): void => {
+    const file = files.find((candidate) => candidate.path === path);
+    if (file) jumpFile(file.fid);
+  };
 
   const [askingNoteId, setAskingNoteId] = useState<string | null>(null);
   const { notify } = review;
@@ -239,7 +247,8 @@ function LoadedReview({
       .then(() => {
         // `promoted` means "in your pending review". Submission ends that pending state;
         // local notes remain in place and are never part of this request.
-        for (const n of allNotes) if (noteState[n.id]?.promoted) patchNote(n.id, { promoted: false });
+        for (const n of allNotes)
+          if (noteState[n.id]?.promoted) patchNote(n.id, { promoted: false });
         setReviewSubmit(null);
         notify('Review submitted to GitHub. Private notes remain local.');
       })
@@ -273,7 +282,18 @@ function LoadedReview({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, promote, reviewSubmit, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
+  }, [
+    active,
+    promote,
+    reviewSubmit,
+    nav,
+    allNotes,
+    current,
+    noteState,
+    jumpNote,
+    patchNote,
+    askClaude,
+  ]);
 
   const aiNotes = analysis?.notes ?? [];
   const stats = {
@@ -282,7 +302,9 @@ function LoadedReview({
     mine: notesFile.mine.length,
     seen: allNotes.filter((n) => noteState[n.id]?.seen).length,
   };
-  const unseen = allNotes.filter((n) => !noteState[n.id]?.seen && !noteState[n.id]?.dismissed).length;
+  const unseen = allNotes.filter(
+    (n) => !noteState[n.id]?.seen && !noteState[n.id]?.dismissed,
+  ).length;
   const summary = (
     <SummaryCard
       estimate={open.estimate}
@@ -353,161 +375,150 @@ function LoadedReview({
                 }}
               >
                 {summary}
+                <GitHubContext prRef={open.target.subject.ref} onJumpPath={jumpPath} />
               </PrHeader>
             )
           )}
           <div className="toolbar" role="toolbar" aria-label="Diff view">
-            <div className="viewed">
-              <span>
-                {viewedCount}/{reviewed.length} viewed
-              </span>
-              <span className="viewed-bar" aria-hidden="true">
-                <span
-                  style={{
-                    width: `${reviewed.length ? (100 * viewedCount) / reviewed.length : 0}%`,
-                  }}
-                />
-              </span>
-            </div>
-            <Seg<Filter>
-              name="filter"
-              label="Filter notes"
-              value={filter}
-              onChange={setFilter}
+            <Seg<ReviewContent>
+              name="review-content"
+              label="Review content"
+              value={content}
+              onChange={setContent}
               options={[
-                {
-                  value: 'all',
-                  label: (
-                    <>
-                      All <span className="seg-count">{allNotes.length}</span>
-                    </>
-                  ),
-                },
-                {
-                  value: 'unseen',
-                  label: (
-                    <>
-                      Unseen <span className="seg-count">{unseen}</span>
-                    </>
-                  ),
-                },
-                {
-                  value: 'high',
-                  label: (
-                    <>
-                      High <span className="seg-count">{stats.high}</span>
-                    </>
-                  ),
-                },
-                {
-                  value: 'medium',
-                  label: (
-                    <>
-                      Medium <span className="seg-count">{stats.medium}</span>
-                    </>
-                  ),
-                },
-                {
-                  value: 'mine',
-                  label: (
-                    <>
-                      Mine <span className="seg-count">{stats.mine}</span>
-                    </>
-                  ),
-                },
+                { value: 'diff', label: 'Diff' },
+                { value: 'impact', label: 'Impact' },
               ]}
             />
-            <div className="toolbar-right">
-              <button
-                className="btn btn-secondary nav-note"
-                onClick={() => {
-                  const previous = stepNote(nav, current, -1);
-                  if (previous) jumpNote(previous);
-                }}
-                disabled={!nav.length}
-              >
-                <Icon name="arrowUp" />
-                Previous
-              </button>
-              <Seg<ViewMode>
-                name="view"
-                label="Diff layout"
-                value={mode}
-                onChange={setMode}
-                options={[
-                  { value: 'unified', label: 'Unified' },
-                  { value: 'split', label: 'Split' },
-                ]}
-              />
-              <Seg<Density>
-                name="density"
-                label="Review density"
-                value={density}
-                onChange={setDensity}
-                options={[
-                  { value: 'comfortable', label: 'Comfortable' },
-                  { value: 'compact', label: 'Compact' },
-                ]}
-              />
-              <button
-                className="btn btn-secondary"
-                onClick={() => {
-                  const next = stepNote(nav, current, 1);
-                  if (next) jumpNote(next);
-                }}
-                disabled={!nav.length}
-              >
-                <Icon name="arrowDown" />
-                Next note
-              </button>
-            </div>
+            {content === 'diff' && (
+              <>
+                <div className="viewed">
+                  <span>
+                    {viewedCount}/{reviewed.length} viewed
+                  </span>
+                  <span className="viewed-bar" aria-hidden="true">
+                    <span
+                      style={{
+                        width: `${reviewed.length ? (100 * viewedCount) / reviewed.length : 0}%`,
+                      }}
+                    />
+                  </span>
+                </div>
+                <Seg<Filter>
+                  name="filter"
+                  label="Filter notes"
+                  value={filter}
+                  onChange={setFilter}
+                  options={[
+                    {
+                      value: 'all',
+                      label: (
+                        <>
+                          All <span className="seg-count">{allNotes.length}</span>
+                        </>
+                      ),
+                    },
+                    {
+                      value: 'unseen',
+                      label: (
+                        <>
+                          Unseen <span className="seg-count">{unseen}</span>
+                        </>
+                      ),
+                    },
+                    {
+                      value: 'high',
+                      label: (
+                        <>
+                          High <span className="seg-count">{stats.high}</span>
+                        </>
+                      ),
+                    },
+                    {
+                      value: 'medium',
+                      label: (
+                        <>
+                          Medium <span className="seg-count">{stats.medium}</span>
+                        </>
+                      ),
+                    },
+                    {
+                      value: 'mine',
+                      label: (
+                        <>
+                          Mine <span className="seg-count">{stats.mine}</span>
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+                <div className="toolbar-right">
+                  <button
+                    className="btn btn-secondary nav-note"
+                    onClick={() => {
+                      const previous = stepNote(nav, current, -1);
+                      if (previous) jumpNote(previous);
+                    }}
+                    disabled={!nav.length}
+                  >
+                    <Icon name="arrowUp" />
+                    Previous
+                  </button>
+                  <Seg<ViewMode>
+                    name="view"
+                    label="Diff layout"
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                      { value: 'unified', label: 'Unified' },
+                      { value: 'split', label: 'Split' },
+                    ]}
+                  />
+                  <Seg<Density>
+                    name="density"
+                    label="Review density"
+                    value={density}
+                    onChange={setDensity}
+                    options={[
+                      { value: 'comfortable', label: 'Comfortable' },
+                      { value: 'compact', label: 'Compact' },
+                    ]}
+                  />
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      const next = stepNote(nav, current, 1);
+                      if (next) jumpNote(next);
+                    }}
+                    disabled={!nav.length}
+                  >
+                    <Icon name="arrowDown" />
+                    Next note
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          <div className="files">
-            {reviewed.map((f) => (
-              <DiffFile
-                key={f.fid}
-                file={f}
-                risk={risks.get(f.fid)}
-                notes={notesByFile.get(f.fid) ?? EMPTY}
-                noteState={noteState}
-                mode={mode}
-                open={!closed[f.fid] && !viewed[f.fid]}
-                viewed={!!viewed[f.fid]}
-                currentNoteId={current}
-                composer={composer?.fid === f.fid ? composer : null}
-                onToggleOpen={() => {
-                  const isOpen = !closed[f.fid] && !viewed[f.fid];
-                  setClosed((c) => ({ ...c, [f.fid]: isOpen }));
-                  setViewed((v) => ({ ...v, [f.fid]: false }));
-                }}
-                onToggleViewed={() => setViewed((v) => ({ ...v, [f.fid]: !v[f.fid] }))}
-                onCompose={setComposer}
-                onSaveNote={saveNote}
-                onPatchNote={patchNote}
-                onDeleteNote={deleteNote}
-                resolveRef={resolveRef}
-                onJumpRef={(id) => setScrollTo({ id, focus: false })}
-                onAskNote={askClaude}
-                askingNoteId={askingNoteId}
-                onPromoteNote={startPromote}
-                promoteBlocked={promoteBlocked}
-              />
-            ))}
-            {noise.map((f) =>
-              loadedNoise[f.fid] ? (
+          {content === 'diff' ? (
+            <div className="files">
+              {reviewed.map((f) => (
                 <DiffFile
                   key={f.fid}
                   file={f}
-                  risk={undefined}
+                  risk={risks.get(f.fid)}
                   notes={notesByFile.get(f.fid) ?? EMPTY}
                   noteState={noteState}
                   mode={mode}
-                  open
-                  viewed={false}
+                  open={!closed[f.fid] && !viewed[f.fid]}
+                  viewed={!!viewed[f.fid]}
                   currentNoteId={current}
                   composer={composer?.fid === f.fid ? composer : null}
-                  onToggleOpen={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
-                  onToggleViewed={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
+                  onToggleOpen={() => {
+                    const isOpen = !closed[f.fid] && !viewed[f.fid];
+                    setClosed((c) => ({ ...c, [f.fid]: isOpen }));
+                    setViewed((v) => ({ ...v, [f.fid]: false }));
+                  }}
+                  onToggleViewed={() => setViewed((v) => ({ ...v, [f.fid]: !v[f.fid] }))}
                   onCompose={setComposer}
                   onSaveNote={saveNote}
                   onPatchNote={patchNote}
@@ -519,23 +530,53 @@ function LoadedReview({
                   onPromoteNote={startPromote}
                   promoteBlocked={promoteBlocked}
                 />
-              ) : (
-                <section key={f.fid} className="noise-file" aria-label={`${f.path}, collapsed`}>
-                  <span>{f.path}</span>
-                  <span className="tag tag-neutral">{noiseKind(f.noise ?? '')}</span>
-                  <span className="rule">
-                    +{f.additions} −{f.deletions} · collapsed by noise rule <b>{f.noise}</b>
-                  </span>
-                  <button
-                    className="link"
-                    onClick={() => setLoadedNoise((s) => ({ ...s, [f.fid]: true }))}
-                  >
-                    Load diff
-                  </button>
-                </section>
-              ),
-            )}
-          </div>
+              ))}
+              {noise.map((f) =>
+                loadedNoise[f.fid] ? (
+                  <DiffFile
+                    key={f.fid}
+                    file={f}
+                    risk={undefined}
+                    notes={notesByFile.get(f.fid) ?? EMPTY}
+                    noteState={noteState}
+                    mode={mode}
+                    open
+                    viewed={false}
+                    currentNoteId={current}
+                    composer={composer?.fid === f.fid ? composer : null}
+                    onToggleOpen={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
+                    onToggleViewed={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
+                    onCompose={setComposer}
+                    onSaveNote={saveNote}
+                    onPatchNote={patchNote}
+                    onDeleteNote={deleteNote}
+                    resolveRef={resolveRef}
+                    onJumpRef={(id) => setScrollTo({ id, focus: false })}
+                    onAskNote={askClaude}
+                    askingNoteId={askingNoteId}
+                    onPromoteNote={startPromote}
+                    promoteBlocked={promoteBlocked}
+                  />
+                ) : (
+                  <section key={f.fid} className="noise-file" aria-label={`${f.path}, collapsed`}>
+                    <span>{f.path}</span>
+                    <span className="tag tag-neutral">{noiseKind(f.noise ?? '')}</span>
+                    <span className="rule">
+                      +{f.additions} −{f.deletions} · collapsed by noise rule <b>{f.noise}</b>
+                    </span>
+                    <button
+                      className="link"
+                      onClick={() => setLoadedNoise((s) => ({ ...s, [f.fid]: true }))}
+                    >
+                      Load diff
+                    </button>
+                  </section>
+                ),
+              )}
+            </div>
+          ) : (
+            <ImpactView targetKey={open.target.key} onJumpPath={jumpPath} />
+          )}
         </main>
         {promote && (
           <PromoteDialog

@@ -26,7 +26,11 @@ describe('GitHub Inbox', () => {
       if (args.includes('search/issues') && args.includes('q=is:pr is:open author:@me'))
         return { code: 0, stdout: JSON.stringify({ items: [searchItem] }), stderr: '' };
       if (args.includes('search/issues'))
-        return { code: 1, stdout: '', stderr: 'Resource protected by organization SAML enforcement' };
+        return {
+          code: 1,
+          stdout: '',
+          stderr: 'Resource protected by organization SAML enforcement',
+        };
       throw new Error(`Unexpected call: ${args.join(' ')}`);
     });
 
@@ -35,13 +39,188 @@ describe('GitHub Inbox', () => {
       organizations: [{ login: 'acme', name: 'Acme', url: 'https://github.com/acme' }],
       authored: [
         {
-          owner: 'acme', repo: 'api', number: 12, title: 'Avoid SAML outage',
-          url: 'https://github.com/acme/api/pull/12', author: 'sam', updatedAt: '2026-10-17T10:00:00Z',
-          reviewDecision: null, reviewRequestCount: 0,
+          owner: 'acme',
+          repo: 'api',
+          number: 12,
+          title: 'Avoid SAML outage',
+          url: 'https://github.com/acme/api/pull/12',
+          author: 'sam',
+          updatedAt: '2026-10-17T10:00:00Z',
+          reviewDecision: null,
+          reviewRequestCount: 0,
         },
       ],
       requested: [],
       unavailable: ['requested'],
     });
+  });
+});
+
+describe('GitHub PR context', () => {
+  it('returns submitted reviews, unresolved threads and check status without a write', async () => {
+    const exec: Exec = vi.fn(async ({ args }) => {
+      if (!args.includes('graphql')) throw new Error(`Unexpected call: ${args.join(' ')}`);
+      return {
+        code: 0,
+        stderr: '',
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewRequests: {
+                  nodes: [
+                    { requestedReviewer: { __typename: 'User', login: 'taylor' } },
+                    {
+                      requestedReviewer: {
+                        __typename: 'Team',
+                        slug: 'platform',
+                        organization: { login: 'acme' },
+                      },
+                    },
+                  ],
+                  pageInfo: { hasNextPage: false },
+                },
+                reviews: {
+                  nodes: [
+                    {
+                      author: { login: 'morgan' },
+                      state: 'APPROVED',
+                      submittedAt: '2026-10-17T11:00:00Z',
+                      body: 'Looks good',
+                      url: 'https://github.com/acme/api/pull/12#pullrequestreview-1',
+                    },
+                    {
+                      author: { login: 'me' },
+                      state: 'PENDING',
+                      submittedAt: null,
+                      body: '',
+                      url: null,
+                    },
+                  ],
+                  pageInfo: { hasNextPage: false },
+                },
+                reviewThreads: {
+                  nodes: [
+                    {
+                      isResolved: false,
+                      isOutdated: false,
+                      path: 'src/auth.ts',
+                      line: 42,
+                      comments: {
+                        nodes: [
+                          {
+                            author: { login: 'sam' },
+                            body: 'Handle retry',
+                            createdAt: '2026-10-17T10:00:00Z',
+                            url: 'https://github.com/acme/api/pull/12#discussion_r1',
+                          },
+                        ],
+                      },
+                    },
+                    {
+                      isResolved: true,
+                      isOutdated: false,
+                      path: 'src/old.ts',
+                      line: 2,
+                      comments: { nodes: [] },
+                    },
+                  ],
+                  pageInfo: { hasNextPage: true },
+                },
+                files: {
+                  nodes: [{ path: 'src/auth.ts' }, { path: 'docs/guide.md' }],
+                  pageInfo: { hasNextPage: false },
+                },
+                baseRef: {
+                  target: {
+                    dotGitHubCodeowners: { text: 'src/** @acme/platform\ndocs/ @writer\n' },
+                    rootCodeowners: null,
+                    docsCodeowners: null,
+                  },
+                },
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        statusCheckRollup: {
+                          contexts: {
+                            nodes: [
+                              {
+                                __typename: 'CheckRun',
+                                name: 'unit',
+                                status: 'COMPLETED',
+                                conclusion: 'SUCCESS',
+                                detailsUrl: 'https://github.com/acme/api/actions/runs/1',
+                              },
+                              {
+                                __typename: 'StatusContext',
+                                context: 'deploy',
+                                state: 'PENDING',
+                                targetUrl: null,
+                              },
+                            ],
+                            pageInfo: { hasNextPage: false },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      };
+    });
+
+    await expect(
+      createGhClient(exec, toolchain).prContext({ owner: 'acme', repo: 'api', number: 12 }),
+    ).resolves.toEqual({
+      requestedReviewers: [
+        { kind: 'user', handle: 'taylor' },
+        { kind: 'team', handle: 'acme/platform' },
+      ],
+      ownership: {
+        sourcePath: '.github/CODEOWNERS',
+        rules: [
+          { pattern: 'src/**', owners: ['@acme/platform'], paths: ['src/auth.ts'] },
+          { pattern: 'docs/', owners: ['@writer'], paths: ['docs/guide.md'] },
+        ],
+        unownedPaths: [],
+      },
+      reviews: [
+        {
+          author: 'morgan',
+          state: 'APPROVED',
+          submittedAt: '2026-10-17T11:00:00Z',
+          body: 'Looks good',
+          url: 'https://github.com/acme/api/pull/12#pullrequestreview-1',
+        },
+      ],
+      unresolvedThreads: [
+        {
+          path: 'src/auth.ts',
+          line: 42,
+          outdated: false,
+          author: 'sam',
+          body: 'Handle retry',
+          createdAt: '2026-10-17T10:00:00Z',
+          url: 'https://github.com/acme/api/pull/12#discussion_r1',
+        },
+      ],
+      checks: [
+        {
+          name: 'unit',
+          status: 'COMPLETED',
+          conclusion: 'SUCCESS',
+          detailsUrl: 'https://github.com/acme/api/actions/runs/1',
+        },
+        { name: 'deploy', status: 'PENDING', conclusion: null, detailsUrl: null },
+      ],
+      truncated: true,
+    });
+    expect(exec).toHaveBeenCalledWith(
+      expect.objectContaining({ args: expect.arrayContaining(['-F', 'number=12']) }),
+    );
   });
 });
