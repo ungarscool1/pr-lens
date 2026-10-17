@@ -75,7 +75,7 @@ export function Sidebar(p: Props) {
     const ai = p.notes.filter((n) => n.fid === file.fid && n.source === 'ai').length;
     const me = p.notes.filter((n) => n.fid === file.fid && n.source === 'me').length;
     return (
-      <li key={file.fid} className="side-tree-file" style={{ paddingLeft: depth * 14 }}>
+      <li key={file.fid} className="side-tree-file" style={{ paddingLeft: depth * 8 }}>
         <button className="side-item" onClick={() => p.onJumpFile(file.fid)}>
           <span className="side-ord">{fileRanks.get(file.fid)}</span>
           <span className="side-body">
@@ -101,7 +101,7 @@ export function Sidebar(p: Props) {
         const path = parentPath ? `${parentPath}/${name}` : name;
         const expanded = !collapsedFolders[path];
         return (
-          <li key={path} className="side-folder" style={{ paddingLeft: depth * 14 }}>
+          <li key={path} className="side-folder" style={{ paddingLeft: depth * 8 }}>
             <button
               className="side-folder-toggle"
               aria-expanded={expanded}
