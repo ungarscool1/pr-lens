@@ -1,15 +1,45 @@
+import { useMemo, useState, type ReactNode } from 'react';
 import type { DiffFile } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
 import type { NoteState } from '../../../../shared/notes';
 import type { Analysis, CacheInfo, Estimate, FileRisk } from '../../../../shared/review';
 import { ago } from '../../lib/time';
-import { SevTag } from '../../ds';
+import { Icon, SevTag } from '../../ds';
 import type { Job } from './useReview';
 import type { ViewNote } from './model';
 
 const k = (n: number): string =>
   n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
 const baseName = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
+
+interface FileTree {
+  count: number;
+  folders: Map<string, FileTree>;
+  files: DiffFile[];
+}
+
+const toFileTree = (files: DiffFile[]): FileTree => {
+  const root: FileTree = { count: 0, folders: new Map(), files: [] };
+
+  for (const file of files) {
+    const parts = file.path.split('/').filter(Boolean);
+    const name = parts.pop();
+    let node = root;
+    node.count += 1;
+    for (const part of parts) {
+      let child = node.folders.get(part);
+      if (!child) {
+        child = { count: 0, folders: new Map(), files: [] };
+        node.folders.set(part, child);
+      }
+      node = child;
+      node.count += 1;
+    }
+    if (name) node.files.push(file);
+  }
+
+  return root;
+};
 
 interface Props {
   files: DiffFile[];
@@ -32,43 +62,74 @@ export function Sidebar(p: Props) {
   const open = p.notes.filter(
     (n) => !p.noteState[n.id]?.dismissed && !p.noteState[n.id]?.seen,
   ).length;
+  const fileTree = useMemo(() => toFileTree(p.orderedFiles), [p.orderedFiles]);
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+  const fileRanks = useMemo(
+    () => new Map(p.orderedFiles.map((file, index) => [file.fid, index + 1])),
+    [p.orderedFiles],
+  );
   let rank = 0;
+
+  const renderFile = (file: DiffFile, depth: number): ReactNode => {
+    const risk = p.risks.get(file.fid);
+    const ai = p.notes.filter((n) => n.fid === file.fid && n.source === 'ai').length;
+    const me = p.notes.filter((n) => n.fid === file.fid && n.source === 'me').length;
+    return (
+      <li key={file.fid} className="side-tree-file" style={{ paddingLeft: depth * 14 }}>
+        <button className="side-item" onClick={() => p.onJumpFile(file.fid)}>
+          <span className="side-ord">{fileRanks.get(file.fid)}</span>
+          <span className="side-body">
+            <span className="side-name" title={file.path}>
+              {baseName(file.path)}
+            </span>
+            {risk?.why && <span className="side-why">{risk.why}</span>}
+            <span className="side-sub">
+              +{file.additions} −{file.deletions}
+              {p.analysis ? ` · ${ai} AI` : ''}
+              {me ? ` · ${me} mine` : ''}
+            </span>
+          </span>
+          {risk && risk.risk !== 'none' ? <SevTag kind={risk.risk}>{risk.risk}</SevTag> : <span />}
+        </button>
+      </li>
+    );
+  };
+
+  const renderTree = (node: FileTree, parentPath: string, depth: number): ReactNode => (
+    <>
+      {[...node.folders].map(([name, folder]) => {
+        const path = parentPath ? `${parentPath}/${name}` : name;
+        const expanded = !collapsedFolders[path];
+        return (
+          <li key={path} className="side-folder" style={{ paddingLeft: depth * 14 }}>
+            <button
+              className="side-folder-toggle"
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'Collapse' : 'Expand'} ${path}`}
+              onClick={() => setCollapsedFolders((folders) => ({ ...folders, [path]: expanded }))}
+            >
+              <Icon name="chevronDown" size={14} />
+              <span className="side-folder-name" title={path}>
+                {name}
+              </span>
+              <span className="side-folder-count">{folder.count}</span>
+            </button>
+            {expanded && <ol className="sidebar-tree-children">{renderTree(folder, path, depth + 1)}</ol>}
+          </li>
+        );
+      })}
+      {node.files.map((file) => renderFile(file, depth))}
+    </>
+  );
 
   return (
     <aside className="sidebar" aria-label="Review navigation">
       <div className="sidebar-head">
-        <h2 className="sidebar-title">Reading order</h2>
-        <span className="sidebar-meta">{p.analysis ? 'AI order' : 'path order'}</span>
+        <h2 className="sidebar-title">Files</h2>
+        <span className="sidebar-meta">{p.analysis ? 'AI priority' : 'path order'}</span>
       </div>
-      <ol className="sidebar-list">
-        {p.orderedFiles.map((f, i) => {
-          const risk = p.risks.get(f.fid);
-          const ai = p.notes.filter((n) => n.fid === f.fid && n.source === 'ai').length;
-          const me = p.notes.filter((n) => n.fid === f.fid && n.source === 'me').length;
-          return (
-            <li key={f.fid}>
-              <button className="side-item" onClick={() => p.onJumpFile(f.fid)}>
-                <span className="side-ord">{i + 1}</span>
-                <span className="side-body">
-                  <span className="side-name" title={f.path}>
-                    {baseName(f.path)}
-                  </span>
-                  {risk?.why && <span className="side-why">{risk.why}</span>}
-                  <span className="side-sub">
-                    +{f.additions} −{f.deletions}
-                    {p.analysis ? ` · ${ai} AI` : ''}
-                    {me ? ` · ${me} mine` : ''}
-                  </span>
-                </span>
-                {risk && risk.risk !== 'none' ? (
-                  <SevTag kind={risk.risk}>{risk.risk}</SevTag>
-                ) : (
-                  <span />
-                )}
-              </button>
-            </li>
-          );
-        })}
+      <ol className="sidebar-list sidebar-tree">
+        {renderTree(fileTree, '', 0)}
         {noise.map((f) => (
           <li key={f.fid} className="side-item static">
             <span className="side-ord">—</span>
