@@ -117,6 +117,7 @@ describe('review service with the cache', () => {
     compareDiff: () => Promise.reject(new Error('unused')),
     tagsAmong: () => Promise.reject(new Error('unused')),
     searchRefs: () => Promise.reject(new Error('unused')),
+    inbox: () => Promise.reject(new Error('unused')),
   };
   const output: ModelOutput = { summary: 'reviewed', files: [], reading_order: [], notes: [] };
   const makeClaude = () => {

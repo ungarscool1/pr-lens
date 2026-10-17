@@ -3,15 +3,16 @@ import type { Health } from '../../shared/health';
 import { parsePrInput } from '../../shared/pr';
 import type { SettingsView } from '../../shared/settings';
 import { ComparePage } from './features/compare/ComparePage';
+import { InboxPage } from './features/inbox/InboxPage';
 import { ReviewPage } from './features/review/ReviewPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { Header } from './features/shell/Header';
 import { api, errorMessage, run } from './lib/api';
 
-export type View = 'review' | 'compare' | 'settings';
+export type View = 'inbox' | 'review' | 'compare' | 'settings';
 
 export function App() {
-  const [view, setView] = useState<View>('review');
+  const [view, setView] = useState<View>('inbox');
   // Compare mounts on first visit (it may query refs) and then stays mounted, like the review.
   const [compareOpened, setCompareOpened] = useState(false);
   const [prInput, setPrInput] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export function App() {
           setView('review');
         }}
         onShowReview={() => setView('review')}
+        onShowInbox={() => setView('inbox')}
         onShowCompare={() => {
           setCompareOpened(true);
           setView('compare');
@@ -67,6 +69,15 @@ export function App() {
             onRecheck={recheck}
           />
         )}
+        {/* Kept mounted, so Inbox data and scroll position survive navigation. */}
+        <div className="view" hidden={view !== 'inbox'}>
+          <InboxPage
+            onOpen={(input) => {
+              setPrInput(input);
+              setView('review');
+            }}
+          />
+        </div>
         {/* Kept mounted while Settings is open, so scroll position and review state survive. */}
         {prInput && settings && (
           <div className="view" hidden={view !== 'review'}>

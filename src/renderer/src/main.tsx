@@ -8,8 +8,7 @@ import '@fontsource/barlow-condensed/600.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import '@fontsource/ibm-plex-mono/600.css';
-import './styles/ds.css';
-import './styles/app.css';
+import './styles/tailwind.css';
 import { App } from './App';
 
 const root = document.getElementById('root');

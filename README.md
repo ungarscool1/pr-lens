@@ -49,7 +49,7 @@ Paste a PR link (`https://github.com/owner/repo/pull/123`) or `owner/repo#123` i
 the top and press Enter. PRs under the auto-run budget (60k input tokens by default) are
 reviewed straight away; bigger ones wait for **Run review**.
 
-If the header shows `not found` or `not logged in`, open **Settings** (click the status chips):
+If the header shows a service issue, open **Settings**:
 the health check says what is missing, and you can point PR Lens at `gh` / `claude` explicitly.
 GUI apps on macOS do not inherit your shell `PATH`; PR Lens asks your login shell for it and
 falls back to `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.claude/local`.
@@ -73,10 +73,15 @@ Settings) with an interactive `claude` in that worktree. The session starts in p
 `.mcp.json` never run) and uses your normal `claude` login. The first message is passed as the
 session's opening prompt; PR Lens never types into the session. macOS only for now.
 
+**Inbox** is home. It shows your open PRs and PRs GitHub has asked you—or a team you belong to—to
+review. Select one to open it. If an organization requires SAML OAuth authorization, the
+accessible Inbox data still loads and the unavailable source is identified.
+
 **Promote to comment** (off by default; turn it on in Settings): adds a note to **your pending
 review** on the PR through your `gh` login. You see and can edit the exact comment, line and
-account in a dialog first; nothing is posted without that confirmation, and nobody sees a
-pending review until you submit it on GitHub. Your `gh` token needs the `repo` scope
+account in a dialog first. The review header also has **Approve**, **Comment**, and **Request
+changes** actions: their dialog submits the whole pending GitHub review, including every staged
+comment. Private notes stay only in PR Lens. Your `gh` token needs the `repo` scope
 (`gh auth refresh -s repo`); Settings shows whether it has it.
 
 Keyboard: `j` / `k` next and previous note, `s` mark seen, `d` dismiss, `a` ask Claude, and inside a diff
@@ -92,8 +97,11 @@ pnpm build
 pnpm start
 ```
 
-`pnpm build` writes the bundles to `out/`; `pnpm start` runs that build. Packaging into a
-signed `.app` is not set up yet.
+`pnpm build` writes the bundles to `out/`; `pnpm start` runs that build. To package an unsigned
+Apple Silicon app locally, run `pnpm package:mac`; it writes `release/mac-arm64/PR Lens.app`.
+GitHub Actions also builds that `.app` on pull requests and `main`, then uploads it as a workflow
+artifact. Signing and notarization are not configured yet, so macOS may require an explicit
+approval before opening the downloaded app.
 
 ## Develop
 
@@ -137,8 +145,8 @@ In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored i
 
 ## What leaves your machine
 
-- `gh` calls to GitHub, with your `gh` login. Read-only unless you turn on Promote to comment: `gh pr view`, `gh pr diff`, `gh issue view`,
-  and `gh api` for compares, commits and ref search.
+- `gh` calls to GitHub, with your `gh` login. Read-only unless you turn on Promote to comment:
+  `gh pr view`, `gh pr diff`, `gh issue view`, and `gh api` for Inbox, compares, commits and ref search.
 - Direct compares of diverged refs fetch just the two commits with `git` (shallow, file
   contents on demand) into the user-data directory, authenticated through `gh`.
 - One `claude -p` call per review with the PR title, description, linked issues and the diff of

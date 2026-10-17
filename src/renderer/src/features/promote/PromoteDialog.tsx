@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { PromotePreview } from '../../../../shared/ipc';
 import { Blueprint } from '../../ds';
-import './promote.css';
 
 interface Props {
   preview: PromotePreview;

@@ -140,6 +140,23 @@ describe('write client', () => {
     expect(arg(calls[0]!, '-f', 'startSide')).toBe('startSide=RIGHT');
   });
 
+  it('submits a pending review with the chosen GitHub event', async () => {
+    const { calls, client } = capture({
+      data: {
+        submitPullRequestReview: {
+          pullRequestReview: { state: 'CHANGES_REQUESTED', url: 'https://github.com/x#review' },
+        },
+      },
+    });
+    await expect(client.submitReview('R1', 'REQUEST_CHANGES', 'Needs a test.')).resolves.toEqual({
+      state: 'CHANGES_REQUESTED',
+      url: 'https://github.com/x#review',
+    });
+    expect(arg(calls[0]!, '-f', 'query')).toContain('submitPullRequestReview');
+    expect(arg(calls[0]!, '-f', 'event')).toBe('event=REQUEST_CHANGES');
+    expect(arg(calls[0]!, '-f', 'body')).toBe('body=Needs a test.');
+  });
+
   it('finds only the viewer’s own pending review', async () => {
     const { client } = capture({
       data: {
@@ -188,6 +205,7 @@ describe('promote service', () => {
       })),
       createPendingReview: vi.fn(async () => 'R-new'),
       addThread: vi.fn(async () => ({ url: 'https://github.com/acme/api/pull/812#discussion_r1' })),
+      submitReview: vi.fn(async () => ({ url: 'https://github.com/acme/api/pull/812#pullrequestreview-1', state: 'APPROVED' })),
     };
     const patchState = vi.fn(async () => undefined);
     const loaded: LoadedTarget = {
@@ -250,6 +268,17 @@ describe('promote service', () => {
     await svc.confirm(p.confirmToken, 'x');
     expect(write.createPendingReview).not.toHaveBeenCalled();
     expect(write.addThread).toHaveBeenCalledWith('R-existing', expect.anything());
+  });
+
+  it('submits the existing pending review and never writes private notes', async () => {
+    const { svc, write, patchState } = make({ pending: 'R-existing' });
+    await expect(svc.submitReview(key, 'REQUEST_CHANGES', 'Please fix this.')).resolves.toEqual({
+      url: 'https://github.com/acme/api/pull/812#pullrequestreview-1',
+      state: 'APPROVED',
+    });
+    expect(write.createPendingReview).not.toHaveBeenCalled();
+    expect(write.submitReview).toHaveBeenCalledWith('R-existing', 'REQUEST_CHANGES', 'Please fix this.');
+    expect(patchState).not.toHaveBeenCalled();
   });
 
   it('accepts each confirmation once, and not after it expires', async () => {

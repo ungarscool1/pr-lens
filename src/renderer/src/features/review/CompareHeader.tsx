@@ -69,6 +69,11 @@ export function CompareHeader(p: Props) {
           ]}
         />
         <span className="tag tag-outline">{diffLabel(meta)}</span>
+        <span className="compare-explainer">
+          {meta.mode === 'three-dot'
+            ? 'Base → merge base → head: changes introduced by head'
+            : 'Base → head: direct tree-to-tree difference'}
+        </span>
       </div>
       <button
         className="btn btn-ghost desc-toggle"

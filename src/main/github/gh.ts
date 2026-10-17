@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AppError } from '../../shared/errors';
 import type { BinHealth, Health } from '../../shared/health';
 import type { LinkedIssue, PrMeta, PrRef } from '../../shared/pr';
+import type { Inbox, InboxOrganization, InboxPullRequest, InboxReviewRequest } from '../../shared/inbox';
 import type { CompareCommit, RefSuggestion, RepoRef } from '../../shared/subject';
 import type { Exec } from '../exec/exec';
 import { ghEnv, requireBin } from '../exec/toolchain';
@@ -22,6 +23,8 @@ export interface GitHubClient {
     repo: RepoRef,
     query: string,
   ): Promise<{ defaultBranch: string | null; refs: RefSuggestion[] }>;
+  /** Open PRs authored by the viewer and review requests addressed to them or their teams. */
+  inbox(): Promise<Inbox>;
 }
 
 export interface CompareInfo {
@@ -76,6 +79,48 @@ const TagJson = z.object({
     }),
   }),
 });
+
+const InboxSearchJson = z.object({
+  items: z.array(
+    z.object({
+      number: z.number(),
+      title: z.string(),
+      html_url: z.string().url(),
+      updated_at: z.string(),
+      user: z.object({ login: z.string() }).nullable(),
+      // Search returns this stable API URL rather than an embedded repository object.
+      repository_url: z.string().url(),
+    }),
+  ),
+});
+
+const OrgListJson = z.array(
+  z.object({
+    login: z.string(),
+    name: z.string().nullable().optional(),
+    // GET /user/orgs returns an API url; html_url is not guaranteed on this endpoint.
+    html_url: z.string().url().optional(),
+  }),
+);
+
+const asInboxPr = (pr: z.infer<typeof InboxSearchJson>['items'][number]): InboxPullRequest => {
+  const match = /\/repos\/([^/]+)\/([^/]+)$/.exec(pr.repository_url);
+  const owner = match?.[1];
+  const repo = match?.[2];
+  if (!owner || !repo) throw new AppError('INTERNAL', 'GitHub returned an invalid repository URL.');
+  return {
+    owner: decodeURIComponent(owner),
+    repo: decodeURIComponent(repo),
+    number: pr.number,
+    title: pr.title,
+    url: pr.html_url,
+    author: pr.user?.login ?? 'ghost',
+    updatedAt: pr.updated_at,
+    // Search deliberately avoids per-row protected-org lookups. The detail view loads this.
+    reviewDecision: null,
+    reviewRequestCount: 0,
+  };
+};
 
 const MAX_LINKED_ISSUES = 3;
 const ISSUE_BODY_LIMIT = 2_000;
@@ -142,6 +187,14 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
     const res = await exec({ file: requireBin(tc.gh, 'gh'), args, env: ghEnv(tc), timeoutMs });
     if (res.code !== 0) throw classifyGhError(res.stderr);
     return res.stdout;
+  };
+  /** An inaccessible organization must not make the whole home screen unavailable. */
+  const optionalGh = async (args: string[]): Promise<string | null> => {
+    try {
+      return await gh(args);
+    } catch {
+      return null;
+    }
   };
   const repoFlag = (r: { owner: string; repo: string }): string => `--repo=${r.owner}/${r.repo}`;
 
@@ -321,6 +374,77 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
           ...r.heads.nodes.map((n) => ({ name: n.name, kind: 'branch' as const })),
           ...r.tags.nodes.map((n) => ({ name: n.name, kind: 'tag' as const })),
         ],
+      };
+    },
+
+    async inbox() {
+      // Search never fans out into protected repositories. Each source is independent, so a
+      // SAML-gated organization leaves the rest of the Inbox usable.
+      const [viewer, orgsOut, authoredOut, requestedOut] = await Promise.all([
+        gh(['api', 'user', '--jq', '.login']),
+        optionalGh(['api', 'user/orgs?per_page=100']),
+        optionalGh([
+          'api',
+          '-X',
+          'GET',
+          'search/issues',
+          '-f',
+          'q=is:pr is:open author:@me',
+          '-f',
+          'sort=updated',
+          '-f',
+          'order=desc',
+          '-F',
+          'per_page=50',
+        ]),
+        optionalGh([
+          'api',
+          '-X',
+          'GET',
+          'search/issues',
+          '-f',
+          'q=is:pr is:open review-requested:@me',
+          '-f',
+          'sort=updated',
+          '-f',
+          'order=desc',
+          '-F',
+          'per_page=50',
+        ]),
+      ]);
+      // A successful gh command can still have a shape GitHub changes or omits. Treat every
+      // optional source as unavailable in that case rather than letting Zod take down Inbox.
+      const orgs = orgsOut ? OrgListJson.safeParse(safeJson(orgsOut)) : null;
+      const authoredSearch = authoredOut ? InboxSearchJson.safeParse(safeJson(authoredOut)) : null;
+      const requestedSearch = requestedOut
+        ? InboxSearchJson.safeParse(safeJson(requestedOut))
+        : null;
+      const unavailable: Inbox['unavailable'] = [];
+      if (!orgs?.success) unavailable.push('organizations');
+      if (!authoredSearch?.success) unavailable.push('authored');
+      if (!requestedSearch?.success) unavailable.push('requested');
+      const organizations: InboxOrganization[] = orgs?.success
+        ? orgs.data.map((org) => ({
+            login: org.login,
+            name: org.name ?? org.login,
+            url: org.html_url ?? `https://github.com/${encodeURIComponent(org.login)}`,
+          }))
+        : [];
+      const authored = authoredSearch?.success
+        ? authoredSearch.data.items.map(asInboxPr)
+        : [];
+      const requested: InboxReviewRequest[] = requestedSearch?.success
+        ? requestedSearch.data.items.map((pr) => ({
+            ...asInboxPr(pr),
+            requestedAs: 'you or a team you belong to',
+          }))
+        : [];
+      return {
+        viewer: viewer.trim(),
+        organizations,
+        authored,
+        requested: requested.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+        unavailable,
       };
     },
   };

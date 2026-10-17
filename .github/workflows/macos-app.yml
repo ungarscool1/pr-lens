@@ -1,0 +1,45 @@
+name: Build macOS app
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Apple Silicon app
+    runs-on: macos-14
+    env:
+      # This workflow deliberately produces an unsigned artifact. Signing and notarization
+      # can be added later with an Apple Developer certificate and notary credentials.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm package:mac
+
+      - name: Upload PR Lens.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: PR-Lens-macOS-arm64
+          path: release/mac-arm64/PR Lens.app
+          if-no-files-found: error

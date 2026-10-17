@@ -5,7 +5,6 @@ import { Seg } from '../../ds';
 import { api, run } from '../../lib/api';
 import { ReviewPage } from '../review/ReviewPage';
 import type { Source } from '../review/useReview';
-import './compare.css';
 
 const SUGGEST_DELAY_MS = 250;
 

@@ -3,7 +3,6 @@ import type { BinHealth, Health } from '../../../../shared/health';
 import type { SettingsPatch, SettingsView } from '../../../../shared/settings';
 import { Blueprint } from '../../ds';
 import { api, errorMessage, run } from '../../lib/api';
-import './settings.css';
 
 interface Props {
   settings: SettingsView;
@@ -152,70 +151,76 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
             placeholder="~/.local/bin/claude (absolute)"
           />
         </div>
-        <div className="field">
-          <label htmlFor="model">Model (empty = claude default)</label>
-          <input
-            id="model"
-            className="input mono"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            placeholder="e.g. opus"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="auto-run">
-            Auto-run when a PR opens, up to N input tokens (0 = never)
-          </label>
-          <input
-            id="auto-run"
-            className="input mono"
-            type="number"
-            min={0}
-            step={1000}
-            value={autoRun}
-            onChange={(e) => setAutoRun(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="max-notes">Max notes per PR (1–10)</label>
-          <input
-            id="max-notes"
-            className="input mono"
-            type="number"
-            min={1}
-            max={10}
-            value={maxNotes}
-            onChange={(e) => setMaxNotes(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="terminal-app">
-            Terminal app for Ask Claude (macOS, must run .command files)
-          </label>
-          <input
-            id="terminal-app"
-            className="input mono"
-            value={terminalApp}
-            onChange={(e) => setTerminalApp(e.target.value)}
-            placeholder="Terminal"
-          />
-        </div>
-        <div className="field wide">
-          <label htmlFor="globs">Noise globs: collapsed and not reviewed (one per line)</label>
-          <textarea
-            id="globs"
-            className="input mono"
-            rows={8}
-            value={globs}
-            onChange={(e) => setGlobs(e.target.value)}
-          />
-        </div>
-        <div className="settings-actions">
-          <button className="btn btn-primary" onClick={() => void save()}>
-            Save settings
-          </button>
-        </div>
       </section>
+
+      <details className="settings-advanced">
+        <summary>Review behavior and advanced preferences</summary>
+        <section className="settings-grid settings-advanced-grid" aria-label="Advanced preferences">
+          <div className="field">
+            <label htmlFor="model">Model (empty = claude default)</label>
+            <input
+              id="model"
+              className="input mono"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="e.g. opus"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="auto-run">
+              Auto-run when a PR opens, up to N input tokens (0 = never)
+            </label>
+            <input
+              id="auto-run"
+              className="input mono"
+              type="number"
+              min={0}
+              step={1000}
+              value={autoRun}
+              onChange={(e) => setAutoRun(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="max-notes">Max notes per PR (1–10)</label>
+            <input
+              id="max-notes"
+              className="input mono"
+              type="number"
+              min={1}
+              max={10}
+              value={maxNotes}
+              onChange={(e) => setMaxNotes(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="terminal-app">
+              Terminal app for Ask Claude (macOS, must run .command files)
+            </label>
+            <input
+              id="terminal-app"
+              className="input mono"
+              value={terminalApp}
+              onChange={(e) => setTerminalApp(e.target.value)}
+              placeholder="Terminal"
+            />
+          </div>
+          <div className="field wide">
+            <label htmlFor="globs">Noise globs: collapsed and not reviewed (one per line)</label>
+            <textarea
+              id="globs"
+              className="input mono"
+              rows={8}
+              value={globs}
+              onChange={(e) => setGlobs(e.target.value)}
+            />
+          </div>
+          <div className="settings-actions">
+            <button className="btn btn-primary" onClick={() => void save()}>
+              Save settings
+            </button>
+          </div>
+        </section>
+      </details>
 
       <Blueprint as="section" className="settings-card" aria-labelledby="promote-h">
         <h2 id="promote-h">Promote to comment</h2>

@@ -15,6 +15,12 @@ export interface PromoteService {
   preview(targetKey: string, noteId: string): Promise<PromotePreview>;
   /** Adds the comment to the viewer's pending review (creating one if needed). */
   confirm(confirmToken: string, body: string): Promise<{ url: string | null }>;
+  /** Submits the pending GitHub review; local/private notes are never sent. */
+  submitReview(
+    targetKey: string,
+    event: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES',
+    body: string,
+  ): Promise<{ url: string | null; state: string }>;
 }
 
 interface Deps {
@@ -127,6 +133,28 @@ export function createPromote(d: Deps): PromoteService {
       const result = await d.write.addThread(reviewId, threadFor(n, text));
       await d.notes.patchState(loaded.target.subject, n.id, { promoted: true });
       return result;
+    },
+
+    async submitReview(key, event, body) {
+      requireEnabled();
+      const text = body.trim();
+      if (text.length > MAX_BODY)
+        throw new AppError('BAD_INPUT', 'The review comment must be at most 65,000 characters.');
+      if ((event === 'COMMENT' || event === 'REQUEST_CHANGES') && !text) {
+        throw new AppError('BAD_INPUT', 'Add a comment before submitting this review.');
+      }
+      const { loaded, ref } = requirePr(key);
+      // Re-read immediately before mutation so staged comments cannot be submitted on a stale head.
+      const ctx = await d.write.reviewContext(ref);
+      if (ctx.headSha !== loaded.target.headSha) {
+        throw new AppError(
+          'BAD_INPUT',
+          'The PR has new commits since this review. Nothing was submitted.',
+        );
+      }
+      const reviewId =
+        ctx.pendingReviewId ?? (await d.write.createPendingReview(ctx.prId, ctx.headSha));
+      return d.write.submitReview(reviewId, event, text);
     },
   };
 }

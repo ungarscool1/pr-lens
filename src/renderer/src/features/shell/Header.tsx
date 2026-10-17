@@ -4,7 +4,6 @@ import { parsePrInput } from '../../../../shared/pr';
 import type { PrRef } from '../../../../shared/pr';
 import type { View } from '../../App';
 import { Blueprint, Icon } from '../../ds';
-import './header.css';
 
 interface Props {
   current: PrRef | null;
@@ -13,6 +12,7 @@ interface Props {
   /** Promote to comment is turned on. */
   canComment: boolean;
   onOpen: (input: string) => void;
+  onShowInbox: () => void;
   onShowReview: () => void;
   onShowCompare: () => void;
   onShowSettings: () => void;
@@ -56,6 +56,7 @@ export function Header({
   health,
   canComment,
   onOpen,
+  onShowInbox,
   onShowReview,
   onShowCompare,
   onShowSettings,
@@ -75,13 +76,20 @@ export function Header({
 
   return (
     <header className="app-header">
-      <span className="brand">
+      <button className="brand brand-home" onClick={onShowInbox} aria-label="PR Lens home: Inbox">
         <Blueprint className="brand-mark" corners={['tl', 'br']}>
           <span />
         </Blueprint>
         <span className="brand-name">PR Lens</span>
-      </span>
+      </button>
       <nav className="tabs" aria-label="Views">
+        <button
+          className="tab"
+          aria-current={view === 'inbox' ? 'page' : undefined}
+          onClick={onShowInbox}
+        >
+          Inbox
+        </button>
         {current && (
           <button
             className="tab"
@@ -134,18 +142,16 @@ export function Header({
         )}
       </form>
       <button
-        className="status"
+        className="settings-trigger"
         onClick={onShowSettings}
-        aria-label="Tool status. Open settings"
+        aria-label={`Settings. ${hl.claude}. ${hl.gh}.`}
         aria-current={view === 'settings' ? 'page' : undefined}
       >
-        <span className="status-item">
-          <span className={`status-dot ${hl.claudeOk ? 'ok' : ''}`} aria-hidden="true" />
-          {hl.claude}
-        </span>
-        <span className="status-item">
-          <span className={`status-dot ${hl.ghOk ? 'ok' : ''}`} aria-hidden="true" />
-          {hl.gh}
+        <Icon name="settings" />
+        <span>Settings</span>
+        <span className="settings-health" aria-hidden="true">
+          <span className={`status-dot ${hl.claudeOk ? 'ok' : ''}`} />
+          <span className={`status-dot ${hl.ghOk ? 'ok' : ''}`} />
         </span>
       </button>
     </header>

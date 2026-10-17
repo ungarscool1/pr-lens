@@ -210,6 +210,7 @@ describe('review service: compare', () => {
       compareDiff: vi.fn(async () => SAMPLE_DIFF),
       tagsAmong: async () => new Set(['v1', 'v2']),
       searchRefs: () => Promise.reject(new Error('unused')),
+      inbox: () => Promise.reject(new Error('unused')),
     };
     const git = {
       directDiff: vi.fn(async () => SAMPLE_DIFF),

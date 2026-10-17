@@ -54,6 +54,11 @@ describe('notes', () => {
     expect(stepNote(list, 'me-abcd1234', 1)?.id).toBe('ai-top');
     expect(stepNote(list, null, -1)?.id).toBe('me-abcd1234');
     expect(navigableNotes(notes, {}, 'high').map((n) => n.id)).toEqual(['ai-top']);
+    expect(navigableNotes(notes, {}, 'medium').map((n) => n.id)).toEqual(['ai-low']);
+    expect(navigableNotes(notes, { 'ai-top': { seen: true } }, 'unseen').map((n) => n.id)).toEqual([
+      'ai-low',
+      'me-abcd1234',
+    ]);
   });
 
   it('highlights only open notes', () => {

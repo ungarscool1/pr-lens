@@ -17,6 +17,12 @@ export interface GitHubWriteClient {
   /** Starts a pending review on `headSha` (no event = PENDING). */
   createPendingReview(prId: string, headSha: string): Promise<string>;
   addThread(reviewId: string, thread: ThreadInput): Promise<{ url: string | null }>;
+  /** Publishes the viewer's pending review, including every thread already staged in it. */
+  submitReview(
+    reviewId: string,
+    event: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES',
+    body: string,
+  ): Promise<{ url: string | null; state: string }>;
 }
 
 export interface ReviewContext {
@@ -89,6 +95,20 @@ const ThreadJson = z.object({
       thread: z
         .object({ comments: z.object({ nodes: z.array(z.object({ url: z.string() })) }) })
         .nullable(),
+    }),
+  }),
+});
+
+const SUBMIT_REVIEW = `mutation($review: ID!, $event: PullRequestReviewEvent!, $body: String!) {
+  submitPullRequestReview(input: { pullRequestReviewId: $review, event: $event, body: $body }) {
+    pullRequestReview { state url }
+  }
+}`;
+
+const SubmitJson = z.object({
+  data: z.object({
+    submitPullRequestReview: z.object({
+      pullRequestReview: z.object({ url: z.string().nullable(), state: z.string() }),
     }),
   }),
 });
@@ -188,6 +208,12 @@ export function createWriteClient(exec: Exec, toolchain: ToolchainService): GitH
             );
       const thread = ThreadJson.parse(raw).data.addPullRequestReviewThread.thread;
       return { url: thread?.comments.nodes[0]?.url ?? null };
+    },
+
+    async submitReview(reviewId, event, body) {
+      const review = SubmitJson.parse(await graphql(SUBMIT_REVIEW, { review: reviewId, event, body }))
+        .data.submitPullRequestReview.pullRequestReview;
+      return review;
     },
   };
 }

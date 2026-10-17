@@ -21,6 +21,7 @@ const api = {
   },
   github: {
     openPr: call('github:openPr'),
+    inbox: call('github:inbox'),
     openCompare: call('github:openCompare'),
     searchRefs: call('github:searchRefs'),
   },
@@ -40,7 +41,11 @@ const api = {
     patchState: call('notes:patchState'),
   },
   deepDive: { open: call('deepDive:open') },
-  promote: { preview: call('promote:preview'), confirm: call('promote:confirm') },
+  promote: {
+    preview: call('promote:preview'),
+    confirm: call('promote:confirm'),
+    submitReview: call('promote:submitReview'),
+  },
   shell: { openExternal: call('shell:openExternal') },
 };
 

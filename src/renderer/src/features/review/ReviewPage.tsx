@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
 import type { OpenResult, PromotePreview } from '../../../../shared/ipc';
+import type { ReviewDecision } from '../../../../shared/ipc';
 import type { DiffMode } from '../../../../shared/subject';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, Seg } from '../../ds';
@@ -11,6 +12,7 @@ import type { ComposerAt, Filter, ViewMode, ViewNote } from './model';
 import { noteDomId } from './NoteView';
 import type { RefTarget } from './NoteView';
 import { PromoteDialog } from '../promote/PromoteDialog';
+import { ReviewSubmitDialog } from '../promote/ReviewSubmitDialog';
 import { CompareHeader } from './CompareHeader';
 import { PrHeader } from './PrHeader';
 import { SummaryCard } from './SummaryCard';
@@ -18,7 +20,8 @@ import { Sidebar } from './Sidebar';
 import { api, errorMessage, run } from '../../lib/api';
 import { useReview } from './useReview';
 import type { ReviewState, Source } from './useReview';
-import './review.css';
+
+type Density = 'comfortable' | 'compact';
 
 const sourceLabel = (s: Source): string =>
   s.kind === 'pr' ? s.input : `${s.owner}/${s.repo} ${s.base} → ${s.head}`;
@@ -87,6 +90,7 @@ function LoadedReview({
   const noteState = notesFile.state;
   const [mode, setMode] = useState<ViewMode>('unified');
   const [filter, setFilter] = useState<Filter>('all');
+  const [density, setDensity] = useState<Density>('comfortable');
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [viewed, setViewed] = useState<Record<string, boolean>>({});
   const [loadedNoise, setLoadedNoise] = useState<Record<string, boolean>>({});
@@ -112,7 +116,15 @@ function LoadedReview({
     () => toViewNotes(analysis?.notes ?? [], notesFile.mine),
     [analysis, notesFile.mine],
   );
-  const shown = useMemo(() => allNotes.filter((n) => passesFilter(n, filter)), [allNotes, filter]);
+  const shown = useMemo(
+    () =>
+      allNotes.filter(
+        (n) =>
+          passesFilter(n, filter) &&
+          (filter !== 'unseen' || (!noteState[n.id]?.seen && !noteState[n.id]?.dismissed)),
+      ),
+    [allNotes, filter, noteState],
+  );
   const notesByFile = useMemo(() => {
     const m = new Map<string, ViewNote[]>();
     for (const n of shown) m.set(n.fid, [...(m.get(n.fid) ?? []), n]);
@@ -215,11 +227,30 @@ function LoadedReview({
       })
       .finally(() => setPromoteBusy(false));
   };
+  const [reviewSubmit, setReviewSubmit] = useState<ReviewDecision | null>(null);
+  const [reviewSubmitBusy, setReviewSubmitBusy] = useState(false);
+  const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(null);
+  const stagedCount = allNotes.filter((n) => noteState[n.id]?.promoted).length;
+  const submitReview = (body: string): void => {
+    if (!reviewSubmit) return;
+    setReviewSubmitBusy(true);
+    setReviewSubmitError(null);
+    run(api.promote.submitReview({ targetKey: open.target.key, event: reviewSubmit, body }))
+      .then(() => {
+        // `promoted` means "in your pending review". Submission ends that pending state;
+        // local notes remain in place and are never part of this request.
+        for (const n of allNotes) if (noteState[n.id]?.promoted) patchNote(n.id, { promoted: false });
+        setReviewSubmit(null);
+        notify('Review submitted to GitHub. Private notes remain local.');
+      })
+      .catch((e: unknown) => setReviewSubmitError(errorMessage(e)))
+      .finally(() => setReviewSubmitBusy(false));
+  };
 
   // Global review shortcuts, ignored while typing or while another view is shown.
   useEffect(() => {
     // While the promote dialog is open it owns the keyboard.
-    if (!active || promote) return;
+    if (!active || promote || reviewSubmit) return;
     const onKey = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null;
       if (e.metaKey || e.ctrlKey || e.altKey || (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))
@@ -242,7 +273,7 @@ function LoadedReview({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, promote, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
+  }, [active, promote, reviewSubmit, nav, allNotes, current, noteState, jumpNote, patchNote, askClaude]);
 
   const aiNotes = analysis?.notes ?? [];
   const stats = {
@@ -251,6 +282,7 @@ function LoadedReview({
     mine: notesFile.mine.length,
     seen: allNotes.filter((n) => noteState[n.id]?.seen).length,
   };
+  const unseen = allNotes.filter((n) => !noteState[n.id]?.seen && !noteState[n.id]?.dismissed).length;
   const summary = (
     <SummaryCard
       estimate={open.estimate}
@@ -259,6 +291,7 @@ function LoadedReview({
       job={review.job?.kind === 'review' ? review.job : null}
       jobError={review.jobError?.kind === 'review' ? review.jobError.message : null}
       stats={stats}
+      headSha={open.target.headSha}
       onRun={() => review.runReview(false)}
       onCancel={review.cancelReview}
     />
@@ -273,7 +306,7 @@ function LoadedReview({
   );
 
   return (
-    <div className="review">
+    <div className={`review density-${density}`}>
       <Sidebar
         files={files}
         orderedFiles={reviewed}
@@ -310,7 +343,15 @@ function LoadedReview({
             </CompareHeader>
           ) : (
             open.target.subject.kind === 'pr' && (
-              <PrHeader prRef={open.target.subject.ref} meta={open.header.meta}>
+              <PrHeader
+                prRef={open.target.subject.ref}
+                meta={open.header.meta}
+                canSubmitReview={promoteEnabled}
+                onSubmitReview={(event) => {
+                  setReviewSubmitError(null);
+                  setReviewSubmit(event);
+                }}
+              >
                 {summary}
               </PrHeader>
             )
@@ -343,10 +384,26 @@ function LoadedReview({
                   ),
                 },
                 {
+                  value: 'unseen',
+                  label: (
+                    <>
+                      Unseen <span className="seg-count">{unseen}</span>
+                    </>
+                  ),
+                },
+                {
                   value: 'high',
                   label: (
                     <>
                       High <span className="seg-count">{stats.high}</span>
+                    </>
+                  ),
+                },
+                {
+                  value: 'medium',
+                  label: (
+                    <>
+                      Medium <span className="seg-count">{stats.medium}</span>
                     </>
                   ),
                 },
@@ -361,6 +418,17 @@ function LoadedReview({
               ]}
             />
             <div className="toolbar-right">
+              <button
+                className="btn btn-secondary nav-note"
+                onClick={() => {
+                  const previous = stepNote(nav, current, -1);
+                  if (previous) jumpNote(previous);
+                }}
+                disabled={!nav.length}
+              >
+                <Icon name="arrowUp" />
+                Previous
+              </button>
               <Seg<ViewMode>
                 name="view"
                 label="Diff layout"
@@ -369,6 +437,16 @@ function LoadedReview({
                 options={[
                   { value: 'unified', label: 'Unified' },
                   { value: 'split', label: 'Split' },
+                ]}
+              />
+              <Seg<Density>
+                name="density"
+                label="Review density"
+                value={density}
+                onChange={setDensity}
+                options={[
+                  { value: 'comfortable', label: 'Comfortable' },
+                  { value: 'compact', label: 'Compact' },
                 ]}
               />
               <button
@@ -466,6 +544,16 @@ function LoadedReview({
             error={promoteError}
             onCancel={() => setPromote(null)}
             onConfirm={confirmPromote}
+          />
+        )}
+        {reviewSubmit && (
+          <ReviewSubmitDialog
+            event={reviewSubmit}
+            stagedCount={stagedCount}
+            busy={reviewSubmitBusy}
+            error={reviewSubmitError}
+            onCancel={() => setReviewSubmit(null)}
+            onSubmit={submitReview}
           />
         )}
         {review.notice && (

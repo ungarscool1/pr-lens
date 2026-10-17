@@ -10,6 +10,10 @@ import { DiffMode, GitRefName, RepoRef, Subject, TargetKey } from './subject';
 import type { CompareMeta, RefSuggestion, Target } from './subject';
 import { OAuthTokenInput, SettingsPatch } from './settings';
 import type { SettingsView } from './settings';
+import type { Inbox } from './inbox';
+
+export const ReviewDecision = z.enum(['APPROVE', 'COMMENT', 'REQUEST_CHANGES']);
+export type ReviewDecision = z.infer<typeof ReviewDecision>;
 
 export type Header = { kind: 'pr'; meta: PrMeta } | { kind: 'compare'; meta: CompareMeta };
 
@@ -63,6 +67,7 @@ export const contract = {
     input: z.object({ input: PrInput }).strict(),
     output: z.custom<OpenResult>(),
   },
+  'github:inbox': { input: z.undefined(), output: z.custom<Inbox>() },
   'github:openCompare': { input: CompareInput, output: z.custom<OpenResult>() },
   'github:searchRefs': {
     input: RepoRef.extend({
@@ -104,6 +109,12 @@ export const contract = {
       .object({ confirmToken: z.string().uuid(), body: z.string().min(1).max(65_000) })
       .strict(),
     output: z.custom<{ url: string | null }>(),
+  },
+  'promote:submitReview': {
+    input: z
+      .object({ targetKey: TargetKey, event: ReviewDecision, body: z.string().max(65_000) })
+      .strict(),
+    output: z.custom<{ url: string | null; state: string }>(),
   },
   'shell:openExternal': {
     input: z.object({ url: z.string().max(2000) }).strict(),

@@ -19,7 +19,7 @@ export type ViewNote =
       body: string;
     };
 
-export type Filter = 'all' | 'high' | 'mine';
+export type Filter = 'all' | 'unseen' | 'high' | 'medium' | 'mine';
 export type ViewMode = 'unified' | 'split';
 
 export function toViewNotes(ai: readonly AiNote[], mine: readonly PrivateNote[]): ViewNote[] {
@@ -43,7 +43,13 @@ export function toViewNotes(ai: readonly AiNote[], mine: readonly PrivateNote[])
 const isFileLevel = (n: ViewNote): boolean => n.source === 'ai' && n.fileLevel;
 
 export const passesFilter = (n: ViewNote, f: Filter): boolean =>
-  f === 'all' || (f === 'high' ? n.source === 'ai' && n.severity === 'high' : n.source === 'me');
+  f === 'all' ||
+  f === 'unseen' ||
+  (f === 'high'
+    ? n.source === 'ai' && n.severity === 'high'
+    : f === 'medium'
+      ? n.source === 'ai' && n.severity === 'medium'
+      : n.source === 'me');
 
 /** The j/k order: ranked AI notes, then mine, skipping dismissed and filtered-out notes. */
 export function navigableNotes(
@@ -51,7 +57,12 @@ export function navigableNotes(
   state: Readonly<Record<string, NoteState>>,
   filter: Filter,
 ): ViewNote[] {
-  return notes.filter((n) => passesFilter(n, filter) && !state[n.id]?.dismissed);
+  return notes.filter(
+    (n) =>
+      passesFilter(n, filter) &&
+      !state[n.id]?.dismissed &&
+      (filter !== 'unseen' || !state[n.id]?.seen),
+  );
 }
 
 export function stepNote(

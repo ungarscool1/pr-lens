@@ -79,6 +79,10 @@ Off unless `promoteEnabled` is set (default false); every call checks it.
    result must come back `PENDING`), then adds the comment with `addPullRequestReviewThread`
    (line or multi-line, or `subjectType: FILE` for file-level notes). The note is marked
    promoted.
+3. `promote:submitReview` checks the setting and head once more, reuses (or starts) the
+   viewer's pending review and submits it as `APPROVE`, `COMMENT`, or `REQUEST_CHANGES`.
+   Every thread already staged in that pending review is submitted together. Only comments
+   explicitly promoted through step 2 ever reach GitHub; private notes and their state never do.
 
 Values go to `gh api graphql` with `-f` (raw strings, so a body starting with `@` is never
 read as a file) and `-F` only for line numbers.
@@ -158,17 +162,34 @@ per file) under `app.getPath('userData')`, each read back through a zod schema.
 
 ## Renderer
 
-Feature folders under `src/renderer/src/features` (`shell`, `review`, `compare`, `settings`).
+Feature folders under `src/renderer/src/features` (`shell`, `inbox`, `review`, `compare`,
+`settings`). The default home view is Inbox. It independently loads the viewer, organization
+membership, authored open PRs, and GitHub's documented `review-requested:@me` search (direct
+requests and requests to teams the viewer belongs to). Each non-identity source is best-effort:
+a SAML-gated organization is shown as unavailable without preventing accessible Inbox data from
+rendering.
 The review page serves both PRs and compares; only the header (`PrHeader` / `CompareHeader`)
-differs. The design
-system stylesheet is copied verbatim into `styles/ds.css`; `styles/app.css` adds the mono font,
-diff and severity tokens, and a dark theme derived from the system ramps. `ds/` holds thin
-React wrappers over the design-system classes. `features/review/model.ts` holds the pure view
-logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
+differs. The Tailwind v4 stylesheet (`styles/tailwind.css`) owns the design tokens, semantic
+component classes, diff/severity states, and the system dark theme. `ds/` holds thin React
+wrappers over those classes. The diff uses blue additions and red deletions, with `+`/`−` markers
+and labels so the state is never conveyed by colour alone. `features/review/model.ts` holds the
+pure view logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
+
+## Packaging and delivery
+
+`pnpm package:mac` first runs the Electron Vite production build, then `electron-builder`
+packages it as an Apple Silicon app at `release/mac-arm64/PR Lens.app`. The package includes the
+compiled `out/` application and its production dependencies; `release/` is a generated,
+git-ignored directory.
+
+`.github/workflows/macos-app.yml` runs on pull requests, pushes to `main`, and manual dispatch.
+It installs the locked dependencies, runs typecheck, lint and tests, builds the app, then uploads
+`PR Lens.app` as the `PR-Lens-macOS-arm64` workflow artifact. The CI build intentionally disables
+macOS code-signing discovery, so the delivered app is unsigned and not notarized.
 
 ## Not built
 
 - The embedded terminal (xterm.js + node-pty) from the design: it needs a native module, which
   the MVP rules out. Ask Claude uses an external terminal instead.
-- Packaging into a signed `.app`, Linux and Windows support, and an Inbox view.
+- macOS signing/notarization, Intel macOS builds, and Linux and Windows support.
 - Pruning of cached analyses and session folders.

@@ -73,6 +73,7 @@ export function registerIpc(
   });
   handle('settings:setOAuthToken', ({ token }) => s.settings.setOAuthToken(token));
   handle('github:openPr', ({ input }) => s.review.openPr(input));
+  handle('github:inbox', () => s.github.inbox());
   handle('github:openCompare', (input) => s.review.openCompare(input));
   handle('github:searchRefs', ({ owner, repo, query }) =>
     s.github.searchRefs({ owner, repo }, query),
@@ -86,6 +87,9 @@ export function registerIpc(
   handle('deepDive:open', ({ targetKey, noteId }) => s.deepDive.open(targetKey, noteId));
   handle('promote:preview', ({ targetKey, noteId }) => s.promote.preview(targetKey, noteId));
   handle('promote:confirm', ({ confirmToken, body }) => s.promote.confirm(confirmToken, body));
+  handle('promote:submitReview', ({ targetKey, event, body }) =>
+    s.promote.submitReview(targetKey, event, body),
+  );
   handle('shell:openExternal', async ({ url }) => {
     if (!isAllowedExternalUrl(url))
       throw new AppError('BAD_INPUT', 'That link is not on the allow-list.');

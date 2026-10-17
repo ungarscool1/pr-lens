@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PrMeta, PrRef } from '../../../../shared/pr';
+import type { ReviewDecision } from '../../../../shared/ipc';
 import { Icon } from '../../ds';
 import { openExternal } from '../../lib/api';
 
@@ -9,11 +10,13 @@ interface Props {
   meta: PrMeta;
   /** The summary card. */
   children: ReactNode;
+  canSubmitReview: boolean;
+  onSubmitReview: (event: ReviewDecision) => void;
 }
 
 const STATE_LABEL = { OPEN: 'Open', CLOSED: 'Closed', MERGED: 'Merged' } as const;
 
-export function PrHeader({ prRef: ref, meta, children }: Props) {
+export function PrHeader({ prRef: ref, meta, children, canSubmitReview, onSubmitReview }: Props) {
   const [showDesc, setShowDesc] = useState(false);
 
   return (
@@ -75,6 +78,34 @@ export function PrHeader({ prRef: ref, meta, children }: Props) {
           ))}
         </div>
       )}
+
+      <div className="review-actions" aria-label="Pull request review actions">
+        <span className="kicker-mono">GitHub review</span>
+        <button
+          className="btn btn-secondary"
+          disabled={!canSubmitReview}
+          title={canSubmitReview ? undefined : 'Turn on Promote to comment in Settings first'}
+          onClick={() => onSubmitReview('APPROVE')}
+        >
+          Approve
+        </button>
+        <button
+          className="btn btn-secondary"
+          disabled={!canSubmitReview}
+          title={canSubmitReview ? undefined : 'Turn on Promote to comment in Settings first'}
+          onClick={() => onSubmitReview('COMMENT')}
+        >
+          Comment
+        </button>
+        <button
+          className="btn btn-primary"
+          disabled={!canSubmitReview}
+          title={canSubmitReview ? undefined : 'Turn on Promote to comment in Settings first'}
+          onClick={() => onSubmitReview('REQUEST_CHANGES')}
+        >
+          Request changes
+        </button>
+      </div>
 
       {children}
     </div>

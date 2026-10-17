@@ -10,6 +10,7 @@ interface Props {
   job: Job | null;
   jobError: string | null;
   stats: { high: number; medium: number; mine: number; seen: number };
+  headSha: string;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -22,6 +23,7 @@ export function SummaryCard({
   job,
   jobError,
   stats,
+  headSha,
   onRun,
   onCancel,
 }: Props) {
@@ -53,6 +55,10 @@ export function SummaryCard({
         ) : analysis ? (
           <>
             <p>{analysis.summary}</p>
+            <p className="summary-context">
+              Reviewed against <code>{headSha.slice(0, 7)}</code>
+              {cache ? ` · ${cache.from === 'cache' ? 'loaded from cache' : 'freshly reviewed'}` : ''}
+            </p>
             {cache?.stale && (
               <p className="summary-note">
                 Cached from a run with other settings or prompts. Re-run to refresh it.
