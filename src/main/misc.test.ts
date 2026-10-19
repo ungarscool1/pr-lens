@@ -7,7 +7,7 @@ import { claudeEnv } from './exec/toolchain';
 import { classifyGhError } from './github/gh';
 import { createLimiter } from './review/limiter';
 import { redactSecrets } from './review/secrets';
-import { isAllowedExternalUrl } from './shell/external';
+import { isAllowedExternalUrl } from '../shared/external';
 
 describe('parsePrInput', () => {
   it.each([
