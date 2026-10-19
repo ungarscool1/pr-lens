@@ -1272,13 +1272,16 @@
   .split .hunk {
     grid-template-columns: 76px minmax(0, 1fr);
   }
+  /* Down above up, as on GitHub: two actions stack instead of splitting the gutter. */
   .hunk-expand {
     display: flex;
+    flex-direction: column;
     background: var(--a2);
     color: var(--a7);
   }
   .hunk-expand-btn {
     flex: 1;
+    min-height: 20px;
     display: grid;
     place-items: center;
     border: 0;
@@ -1288,7 +1291,7 @@
     cursor: pointer;
   }
   .hunk-expand-btn + .hunk-expand-btn {
-    border-left: 1px solid var(--a3);
+    border-top: 1px solid var(--a3);
   }
   .hunk-expand-btn:hover {
     background: var(--a3);
@@ -1309,6 +1312,7 @@
     background: var(--n2);
   }
   .hunk-text {
+    align-self: center;
     padding: 0 12px;
     white-space: nowrap;
     overflow: hidden;
