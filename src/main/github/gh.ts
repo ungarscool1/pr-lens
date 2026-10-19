@@ -185,9 +185,15 @@ const PR_CONTEXT_QUERY = `query($owner: String!, $name: String!, $number: Int!) 
       baseRef {
         target {
           ... on Commit {
-            dotGitHubCodeowners: file(path: ".github/CODEOWNERS") { text }
-            rootCodeowners: file(path: "CODEOWNERS") { text }
-            docsCodeowners: file(path: "docs/CODEOWNERS") { text }
+            dotGitHubCodeowners: file(path: ".github/CODEOWNERS") {
+              object { ... on Blob { text } }
+            }
+            rootCodeowners: file(path: "CODEOWNERS") {
+              object { ... on Blob { text } }
+            }
+            docsCodeowners: file(path: "docs/CODEOWNERS") {
+              object { ... on Blob { text } }
+            }
           }
         }
       }
@@ -223,7 +229,9 @@ const RequestedReviewerJson = z
     }),
   ])
   .nullable();
-const CodeownersFileJson = z.object({ text: z.string().nullable() }).nullable();
+const CodeownersFileJson = z
+  .object({ object: z.object({ text: z.string().nullable() }).nullable() })
+  .nullable();
 const PrContextJson = z.object({
   data: z.object({
     repository: z.object({
@@ -473,9 +481,9 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
       const rollup = pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts;
       const base = pr.baseRef?.target;
       const codeowners = [
-        ['.github/CODEOWNERS', base?.dotGitHubCodeowners?.text],
-        ['CODEOWNERS', base?.rootCodeowners?.text],
-        ['docs/CODEOWNERS', base?.docsCodeowners?.text],
+        ['.github/CODEOWNERS', base?.dotGitHubCodeowners?.object?.text],
+        ['CODEOWNERS', base?.rootCodeowners?.object?.text],
+        ['docs/CODEOWNERS', base?.docsCodeowners?.object?.text],
       ].find((entry): entry is [string, string] => typeof entry[1] === 'string');
       return {
         requestedReviewers: pr.reviewRequests.nodes.flatMap<GitHubRequestedReviewer>((request) => {
@@ -483,7 +491,12 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
           if (!reviewer) return [];
           return reviewer.__typename === 'User'
             ? [{ kind: 'user' as const, handle: reviewer.login }]
-            : [{ kind: 'team' as const, handle: `${reviewer.organization.login}/${reviewer.slug}` }];
+            : [
+                {
+                  kind: 'team' as const,
+                  handle: `${reviewer.organization.login}/${reviewer.slug}`,
+                },
+              ];
         }),
         ownership: resolveCodeowners(
           codeowners?.[1] ?? null,
