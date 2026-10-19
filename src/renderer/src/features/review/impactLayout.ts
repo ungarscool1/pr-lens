@@ -170,9 +170,16 @@ export function layoutImpact(map: Pick<ImpactMap, 'nodes' | 'edges'>): ImpactLay
     height: PAD * 2 + HEADER + tallest * (NODE_H + ROW_GAP) + 40,
     nodes: [...placed.values()],
     edges,
-    columns: columns.map((_, i) => ({
+    columns: columns.map((column, i) => ({
       x: PAD + i * (NODE_W + COL_GAP),
-      label: i < first ? 'Callers' : i > last ? 'Callees' : 'Changed',
+      label:
+        i < first
+          ? 'Callers'
+          : i > last
+            ? 'Callees'
+            : column.every((node) => node.changed)
+              ? 'Changed'
+              : 'Changed and related',
     })),
   };
 }

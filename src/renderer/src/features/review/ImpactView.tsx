@@ -24,7 +24,7 @@ const actionOf = (node: ImpactNode, diffPaths: ReadonlySet<string>): string =>
       ? 'Show in the diff'
       : 'Open on GitHub at this commit';
 
-export function ImpactGraph({
+function ImpactGraph({
   map,
   diffPaths,
   onOpen,

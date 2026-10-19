@@ -73,6 +73,22 @@ describe('layoutImpact', () => {
     expect(top('x')).toBeLessThan(top('y'));
   });
 
+  it('names a column that mixes changed and related functions', () => {
+    const [a, b, helper] = [node('a', true), node('b', true), node('helper')];
+    const layout = layoutImpact({
+      nodes: [a, b, helper],
+      edges: [
+        { from: a.id, to: b.id },
+        { from: a.id, to: helper.id },
+      ],
+    });
+    expect(layerOf(layout, 'helper')).toBe(1);
+    expect(layout.columns.map((column) => column.label)).toEqual([
+      'Changed',
+      'Changed and related',
+    ]);
+  });
+
   it('lays out a lone changed function with no edges', () => {
     const layout = layoutImpact({ nodes: [node('alone', true)], edges: [] });
     expect(layout.nodes).toHaveLength(1);
