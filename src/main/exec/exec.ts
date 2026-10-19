@@ -11,6 +11,8 @@ export interface ExecRequest {
   timeoutMs?: number;
   signal?: AbortSignal;
   maxBufferBytes?: number;
+  /** `latin1` maps each output byte to one char, for callers that frame output by byte counts. */
+  encoding?: 'utf8' | 'latin1';
 }
 
 export interface ExecResult {
@@ -37,7 +39,7 @@ export const execFileRunner: Exec = (req) =>
         timeout: req.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         signal: req.signal,
         maxBuffer: req.maxBufferBytes ?? DEFAULT_MAX_BUFFER,
-        encoding: 'utf8',
+        encoding: req.encoding ?? 'utf8',
         windowsHide: true,
       },
       (err, stdout, stderr) => {

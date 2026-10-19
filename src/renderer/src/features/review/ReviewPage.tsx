@@ -3,6 +3,8 @@ import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
 import type { OpenResult, PromotePreview } from '../../../../shared/ipc';
 import type { ReviewDecision } from '../../../../shared/ipc';
+import type { ImpactNode } from '../../../../shared/impact';
+import { repoOf } from '../../../../shared/subject';
 import type { DiffMode } from '../../../../shared/subject';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, Seg } from '../../ds';
@@ -19,7 +21,7 @@ import { CompareHeader } from './CompareHeader';
 import { PrHeader } from './PrHeader';
 import { SummaryCard } from './SummaryCard';
 import { Sidebar } from './Sidebar';
-import { api, errorMessage, run } from '../../lib/api';
+import { api, errorMessage, openExternal, run } from '../../lib/api';
 import { useReview } from './useReview';
 import type { ReviewState, Source } from './useReview';
 
@@ -182,7 +184,12 @@ function LoadedReview({
   const [loadedNoise, setLoadedNoise] = useState<Record<string, boolean>>({});
   const [current, setCurrent] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerAt | null>(null);
-  const [scrollTo, setScrollTo] = useState<{ id: string; focus: boolean } | null>(null);
+  const [scrollTo, setScrollTo] = useState<{
+    id: string;
+    focus: boolean;
+    /** Center and briefly mark the target: a line reached from the impact map. */
+    flash?: boolean;
+  } | null>(null);
 
   const files = open.diff.files;
   const risks = useMemo(
@@ -238,8 +245,15 @@ function LoadedReview({
   useEffect(() => {
     if (!scrollTo) return;
     const el = document.getElementById(scrollTo.id);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el?.scrollIntoView({ behavior: 'smooth', block: scrollTo.flash ? 'center' : 'start' });
     if (scrollTo.focus) el?.focus({ preventScroll: true });
+    if (!scrollTo.flash || !el) return;
+    el.classList.add('line-flash');
+    const timer = setTimeout(() => el.classList.remove('line-flash'), 1800);
+    return () => {
+      clearTimeout(timer);
+      el.classList.remove('line-flash');
+    };
   }, [scrollTo]);
 
   const openFile = (fid: string): void => {
@@ -262,6 +276,35 @@ function LoadedReview({
   const jumpPath = (path: string): void => {
     const file = files.find((candidate) => candidate.path === path);
     if (file) jumpFile(file.fid);
+  };
+  const diffPaths = useMemo(() => new Set(files.map((file) => file.path)), [files]);
+  /** From the impact map: the changed line, else a diff line inside the function, else the file. */
+  const showInDiff = (path: string, lineId: string | null, from: number, to: number): boolean => {
+    const file = files.find((candidate) => candidate.path === path);
+    if (!file) return false;
+    const target =
+      lineId ??
+      file.hunks
+        .flatMap((hunk) => hunk.lines)
+        .find((line) => line.new !== undefined && line.new >= from && line.new <= to)?.id;
+    setContent('diff');
+    openFile(file.fid);
+    if (file.noise !== null) setLoadedNoise((s) => ({ ...s, [file.fid]: true }));
+    setScrollTo(
+      target
+        ? { id: lineDomId(target), focus: false, flash: true }
+        : { id: fileDomId(file.fid), focus: false },
+    );
+    return true;
+  };
+  const openImpactNode = (node: ImpactNode): void => {
+    if (showInDiff(node.path, node.anchorLineId, node.startLine, node.endLine)) return;
+    // Outside the diff: the function at this exact commit on GitHub.
+    const { owner, repo } = repoOf(open.target.subject);
+    const path = node.path.split('/').map(encodeURIComponent).join('/');
+    openExternal(
+      `https://github.com/${owner}/${repo}/blob/${open.target.headSha}/${path}#L${node.startLine}-L${node.endLine}`,
+    );
   };
 
   const [askingNoteId, setAskingNoteId] = useState<string | null>(null);
@@ -644,7 +687,12 @@ function LoadedReview({
               )}
             </div>
           ) : (
-            <ImpactView targetKey={open.target.key} onJumpPath={jumpPath} />
+            <ImpactView
+              targetKey={open.target.key}
+              diffPaths={diffPaths}
+              onJumpPath={(path) => showInDiff(path, null, 0, 0)}
+              onOpenNode={openImpactNode}
+            />
           )}
         </main>
         {promote && (

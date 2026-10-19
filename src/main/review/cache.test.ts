@@ -96,7 +96,24 @@ describe('createAnalysisCache', () => {
     await expect(createAnalysisCache(store).get(ref, '../../etc', settings)).rejects.toThrow();
   });
 
-  it('prunes expired analysis heads together with their release summaries', async () => {
+  it('stores an impact map per head and treats another analyzer or diff key as a miss', async () => {
+    const { store } = await tempStore();
+    const cache = createAnalysisCache(store);
+    const map = {
+      nodes: [],
+      edges: [],
+      imports: [],
+      tests: [],
+      scannedFiles: 3,
+      skippedFiles: 0,
+      omittedChanged: 0,
+    };
+    await cache.putImpact(ref, HEAD, 'k1', map);
+    await expect(cache.getImpact(ref, HEAD, 'k1')).resolves.toEqual(map);
+    await expect(cache.getImpact(ref, HEAD, 'k2')).resolves.toBeNull();
+  });
+
+  it('prunes expired analysis heads together with their release summaries and impact maps', async () => {
     const { dir, store } = await tempStore();
     const cache = createAnalysisCache(store, join(dir, 'analyses'));
     const subjectDir = join(dir, 'analyses/acme__api__812');
@@ -105,15 +122,21 @@ describe('createAnalysisCache', () => {
     await mkdir(subjectDir, { recursive: true });
     const oldAnalysis = join(subjectDir, `${oldSha}.json`);
     const oldRelease = join(subjectDir, `${oldSha}.release.json`);
+    const oldImpact = join(subjectDir, `${oldSha}.impact.json`);
     const freshAnalysis = join(subjectDir, `${freshSha}.json`);
-    await Promise.all([writeFile(oldAnalysis, '{}'), writeFile(oldRelease, '{}'), writeFile(freshAnalysis, '{}')]);
+    await Promise.all(
+      [oldAnalysis, oldRelease, oldImpact, freshAnalysis].map((path) => writeFile(path, '{}')),
+    );
     const expired = new Date(Date.now() - ANALYSIS_CACHE_MAX_AGE_MS - 1_000);
-    await Promise.all([utimes(oldAnalysis, expired, expired), utimes(oldRelease, expired, expired)]);
+    await Promise.all(
+      [oldAnalysis, oldRelease, oldImpact].map((path) => utimes(path, expired, expired)),
+    );
 
     await cache.prune();
 
     await expect(stat(oldAnalysis)).rejects.toThrow();
     await expect(stat(oldRelease)).rejects.toThrow();
+    await expect(stat(oldImpact)).rejects.toThrow();
     await expect(stat(freshAnalysis)).resolves.toBeDefined();
   });
 });
@@ -174,7 +197,7 @@ describe('review service with the cache', () => {
       git: {
         directDiff: () => Promise.reject(new Error('unused')),
         worktree: () => Promise.reject(new Error('unused')),
-        treePaths: () => Promise.reject(new Error('unused')),
+        treeEntries: () => Promise.reject(new Error('unused')),
         sourceFiles: () => Promise.reject(new Error('unused')),
       },
       claude,

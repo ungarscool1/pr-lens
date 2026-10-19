@@ -8,6 +8,7 @@ import type {
   ImpactNode,
   ImpactTest,
 } from '../../shared/impact';
+import { changedLines, isImpactSource, isTestPath } from './changes';
 
 export interface SourceText {
   path: string;
@@ -18,359 +19,343 @@ export interface ImpactInput {
   sources: SourceText[];
   diff: DiffModel;
   skippedFiles: number;
+  /** Root `tsconfig*.json` / `jsconfig.json` texts by path, for `paths` and `baseUrl`. */
+  configs: SourceText[];
 }
 
-interface ImportBinding {
-  path: string | null;
-  symbol: string | null;
-  namespace: boolean;
-}
+/** Changed declarations expanded into the graph; the rest are counted, not drawn. */
+export const MAX_CHANGED_FUNCTIONS = 60;
 
-interface ParsedImport extends ImpactImport {
-  bindings: Map<string, ImportBinding>;
-}
+const ROOT = '/repo/';
 
-interface FunctionInfo extends ImpactNode {
-  className: string | null;
-  body: ts.ConciseBody | undefined;
-  source: ts.SourceFile;
-  imports: Map<string, ImportBinding>;
-}
-
-interface ParsedFile {
-  path: string;
-  test: boolean;
-  functions: FunctionInfo[];
-  imports: ParsedImport[];
-}
-
-const SOURCE_FILE = /\.(?:cts|mts|ts|tsx)$/i;
-const TEST_FILE = /(?:^|\/)(?:__tests__|test|tests)\/|\.(?:test|spec)\.(?:cts|mts|ts|tsx)$/i;
-
-export const isImpactSource = (path: string): boolean =>
-  SOURCE_FILE.test(path) && !/\.d\.ts$/i.test(path);
-
-const isTestPath = (path: string): boolean => TEST_FILE.test(path);
-
-const functionId = (path: string, name: string, line: number): string => `${path}:${line}:${name}`;
-
-const classNameOf = (node: ts.Node): string | null => {
-  let current = node.parent;
-  while (current) {
-    if ((ts.isClassDeclaration(current) || ts.isClassExpression(current)) && current.name)
-      return current.name.text;
-    current = current.parent;
+/** Only module resolution settings are taken from the repository's config; nothing else. */
+function compilerOptions(configs: SourceText[]): ts.CompilerOptions {
+  const options: ts.CompilerOptions = {
+    noLib: true,
+    allowJs: true,
+    checkJs: false,
+    jsx: ts.JsxEmit.Preserve,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    allowImportingTsExtensions: true,
+    target: ts.ScriptTarget.Latest,
+    noEmit: true,
+    types: [],
+  };
+  const byPath = new Map(configs.map((config) => [config.path, config.text]));
+  const chain: Record<string, unknown>[] = [];
+  let path: string | null = byPath.has('tsconfig.json') ? 'tsconfig.json' : 'jsconfig.json';
+  for (let hops = 0; path && hops < 4; hops++) {
+    const text = byPath.get(path);
+    if (text === undefined) break;
+    const parsed = ts.parseConfigFileTextToJson(path, text).config as unknown;
+    if (!parsed || typeof parsed !== 'object') break;
+    const config = parsed as { extends?: unknown; compilerOptions?: unknown };
+    if (config.compilerOptions && typeof config.compilerOptions === 'object')
+      chain.unshift(config.compilerOptions as Record<string, unknown>);
+    path =
+      typeof config.extends === 'string' && config.extends.startsWith('.')
+        ? posix.normalize(
+            config.extends.endsWith('.json') ? config.extends : `${config.extends}.json`,
+          )
+        : null;
   }
-  return null;
-};
-
-const propertyName = (name: ts.PropertyName | undefined): string | null => {
-  if (!name) return null;
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name))
-    return name.text;
-  return null;
-};
-
-const functionName = (node: ts.FunctionLikeDeclarationBase): string | null => {
-  if (ts.isFunctionDeclaration(node)) return node.name?.text ?? null;
-  if (
-    ts.isMethodDeclaration(node) ||
-    ts.isGetAccessorDeclaration(node) ||
-    ts.isSetAccessorDeclaration(node)
-  ) {
-    const name = propertyName(node.name);
-    if (!name) return null;
-    const className = classNameOf(node);
-    return className ? `${className}.${name}` : name;
+  for (const co of chain) {
+    if (typeof co.baseUrl === 'string') options.baseUrl = posix.join(ROOT, co.baseUrl);
+    if (co.paths && typeof co.paths === 'object') {
+      const paths: ts.MapLike<string[]> = {};
+      for (const [key, value] of Object.entries(co.paths as Record<string, unknown>)) {
+        if (Array.isArray(value))
+          paths[key] = value.filter((v): v is string => typeof v === 'string');
+      }
+      options.paths = paths;
+    }
   }
-  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-    const parent = node.parent;
-    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
-  }
-  return null;
-};
+  return options;
+}
 
-type FunctionLike =
+type Callable =
   | ts.FunctionDeclaration
   | ts.MethodDeclaration
   | ts.GetAccessorDeclaration
   | ts.SetAccessorDeclaration
   | ts.ArrowFunction
-  | ts.FunctionExpression;
+  | ts.FunctionExpression
+  | ts.ClassDeclaration;
 
-const isNestedFunction = (node: ts.Node): node is FunctionLike =>
-  ts.isFunctionDeclaration(node) ||
-  ts.isMethodDeclaration(node) ||
-  ts.isGetAccessorDeclaration(node) ||
-  ts.isSetAccessorDeclaration(node) ||
-  ts.isArrowFunction(node) ||
-  ts.isFunctionExpression(node);
-
-const resolveRelativeImport = (
-  path: string,
-  module: string,
-  known: ReadonlySet<string>,
-): string | null => {
-  if (!module.startsWith('.')) return null;
-  const stem = posix.normalize(posix.join(posix.dirname(path), module));
-  const candidates = [
-    `${stem}.ts`,
-    `${stem}.tsx`,
-    `${stem}.mts`,
-    `${stem}.cts`,
-    `${stem}/index.ts`,
-    `${stem}/index.tsx`,
-    `${stem}/index.mts`,
-    `${stem}/index.cts`,
-  ];
-  return candidates.find((candidate) => known.has(candidate)) ?? null;
-};
-
-const importsOf = (
-  source: ts.SourceFile,
-  path: string,
-  known: ReadonlySet<string>,
-): ParsedImport[] => {
-  const imports: ParsedImport[] = [];
-  for (const statement of source.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
-      continue;
-    const module = statement.moduleSpecifier.text;
-    const resolvedPath = resolveRelativeImport(path, module, known);
-    const bindings = new Map<string, ImportBinding>();
-    const clause = statement.importClause;
-    if (clause?.name)
-      bindings.set(clause.name.text, { path: resolvedPath, symbol: 'default', namespace: false });
-    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      for (const item of clause.namedBindings.elements) {
-        bindings.set(item.name.text, {
-          path: resolvedPath,
-          symbol: item.propertyName?.text ?? item.name.text,
-          namespace: false,
-        });
-      }
-    }
-    if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
-      bindings.set(clause.namedBindings.name.text, {
-        path: resolvedPath,
-        symbol: null,
-        namespace: true,
-      });
-    }
-    imports.push({ path, module, resolvedPath, bindings });
+/**
+ * Where the language service should be asked about a declaration: its name, if it has one.
+ * Constructors are not listed: the call hierarchy reports them as their class.
+ */
+function namePosition(node: ts.Node, source: ts.SourceFile): number | null {
+  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+    const parent = node.parent;
+    if (
+      (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) ||
+      ts.isPropertyAssignment(parent) ||
+      ts.isPropertyDeclaration(parent)
+    )
+      return parent.name.getStart(source);
+    return node.name ? node.name.getStart(source) : null;
   }
-  return imports;
-};
+  if (
+    ts.isFunctionDeclaration(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessorDeclaration(node) ||
+    ts.isSetAccessorDeclaration(node) ||
+    ts.isClassDeclaration(node)
+  )
+    return node.name ? node.name.getStart(source) : null;
+  return null;
+}
 
-const functionsOf = (
-  source: ts.SourceFile,
-  path: string,
-  test: boolean,
-  imports: ParsedImport[],
-): FunctionInfo[] => {
-  const functions: FunctionInfo[] = [];
-  const bindings = new Map<string, ImportBinding>();
-  for (const imp of imports)
-    for (const [name, binding] of imp.bindings) bindings.set(name, binding);
+interface Declaration {
+  node: Callable;
+  namePos: number;
+  startLine: number;
+  endLine: number;
+}
 
+function declarationsOf(source: ts.SourceFile): Declaration[] {
+  const found: Declaration[] = [];
+  const line = (pos: number): number => source.getLineAndCharacterOfPosition(pos).line + 1;
   const visit = (node: ts.Node): void => {
-    if (isNestedFunction(node)) {
-      const name = functionName(node);
-      if (name) {
-        const startLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-        const endLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
-        functions.push({
-          id: functionId(path, name, startLine),
-          name,
-          path,
-          startLine,
-          endLine,
-          changed: false,
-          test,
-          className: classNameOf(node),
-          body: node.body,
-          source,
-          imports: bindings,
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isMethodDeclaration(node) ||
+      ts.isGetAccessorDeclaration(node) ||
+      ts.isSetAccessorDeclaration(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isClassDeclaration(node)
+    ) {
+      const namePos = namePosition(node, source);
+      if (namePos !== null) {
+        // A `const f = () => …` declaration starts at the variable, so its first line counts.
+        const outer =
+          (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+          ts.isVariableDeclaration(node.parent)
+            ? node.parent.parent
+            : node;
+        found.push({
+          node,
+          namePos,
+          startLine: line(outer.getStart(source)),
+          endLine: line(node.getEnd()),
         });
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return functions;
-};
+  return found;
+}
 
-const changedRanges = (diff: DiffModel): Map<string, Set<number>> => {
-  const lines = new Map<string, Set<number>>();
-  for (const file of diff.files) {
-    if (!isImpactSource(file.path) || file.binary) continue;
-    const changed = new Set<number>();
-    for (const hunk of file.hunks) {
-      // Context lines deliberately count: a pure deletion still identifies the enclosing
-      // surviving function, while the actual change remains visible in the diff.
-      for (const line of hunk.lines) if (line.new !== undefined) changed.add(line.new);
-    }
-    if (changed.size) lines.set(file.path, changed);
-  }
-  return lines;
-};
-
-const hasChangedLine = (fn: FunctionInfo, changes: Map<string, Set<number>>): boolean => {
-  const lines = changes.get(fn.path);
-  if (!lines) return false;
-  for (const line of lines) if (line >= fn.startLine && line <= fn.endLine) return true;
-  return false;
-};
-
-const targetKey = (path: string, symbol: string): string => `${path}\u0000${symbol}`;
-
-const targetOf = (
-  call: ts.CallExpression,
-  owner: FunctionInfo,
-  byPathName: ReadonlyMap<string, FunctionInfo>,
-): FunctionInfo | null => {
-  const expression = call.expression;
-  let path = owner.path;
-  let name: string | null = null;
-  if (ts.isIdentifier(expression)) {
-    const imported = owner.imports.get(expression.text);
-    if (imported?.path && imported.symbol) {
-      path = imported.path;
-      name = imported.symbol;
-    } else {
-      name = expression.text;
-    }
-  } else if (ts.isPropertyAccessExpression(expression)) {
-    if (expression.expression.kind === ts.SyntaxKind.ThisKeyword && owner.className) {
-      name = `${owner.className}.${expression.name.text}`;
-    } else if (ts.isIdentifier(expression.expression)) {
-      const imported = owner.imports.get(expression.expression.text);
-      if (imported?.path && imported.namespace) {
-        path = imported.path;
-        name = expression.name.text;
-      }
-    }
-  }
-  return name ? (byPathName.get(targetKey(path, name)) ?? null) : null;
-};
-
-const callsOf = (
-  owner: FunctionInfo,
-  byPathName: ReadonlyMap<string, FunctionInfo>,
-): FunctionInfo[] => {
-  if (!owner.body) return [];
-  const calls = new Map<string, FunctionInfo>();
-  const visit = (node: ts.Node): void => {
-    if (node !== owner.body && isNestedFunction(node)) return;
-    if (ts.isCallExpression(node)) {
-      const target = targetOf(node, owner, byPathName);
-      if (target) calls.set(target.id, target);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(owner.body);
-  return [...calls.values()];
-};
+const relPath = (file: string): string => file.slice(ROOT.length);
+const nodeId = (path: string, offset: number): string => `${path}#${offset}`;
 
 /**
- * Builds a bounded, syntax-only map. It resolves local and relative-import calls without type
- * checking, so dynamic dispatch and path aliases are intentionally left out rather than guessed.
+ * Builds the graph with the TypeScript language service's call hierarchy, over an in-memory
+ * snapshot of the head commit: the same analysis an editor's "Show call hierarchy" runs, so
+ * imports through `paths`, re-exports, interface methods and JSX usage resolve without a
+ * checkout, type libraries or `node_modules`. What cannot be resolved that way is left out.
  */
 export function analyzeImpact(input: ImpactInput): ImpactMap {
-  const sources = input.sources.filter((source) => isImpactSource(source.path));
-  const knownPaths = new Set(sources.map((source) => source.path));
-  const parsed = sources.map((file) => {
-    const source = ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true);
-    const imports = importsOf(source, file.path, knownPaths);
-    return {
-      path: file.path,
-      test: isTestPath(file.path),
-      imports,
-      functions: functionsOf(source, file.path, isTestPath(file.path), imports),
-    } satisfies ParsedFile;
-  });
-  const functions = parsed.flatMap((file) => file.functions);
-  const byPathName = new Map<string, FunctionInfo>();
-  for (const fn of functions) {
-    const key = targetKey(fn.path, fn.name);
-    if (!byPathName.has(key)) byPathName.set(key, fn);
+  const files = new Map(
+    input.sources
+      .filter((source) => isImpactSource(source.path))
+      .map((source) => [ROOT + source.path, source.text]),
+  );
+  const directories = new Set<string>();
+  for (const file of files.keys()) {
+    for (let dir = posix.dirname(file); dir.length >= ROOT.length - 1; dir = posix.dirname(dir)) {
+      if (directories.has(dir)) break;
+      directories.add(dir);
+    }
+  }
+  const options = compilerOptions(input.configs);
+  const fileExists = (file: string): boolean => files.has(file);
+  const readFile = (file: string): string | undefined => files.get(file);
+  const directoryExists = (dir: string): boolean => directories.has(dir.replace(/\/$/, ''));
+  const getCurrentDirectory = (): string => ROOT.slice(0, -1);
+  const moduleHost: ts.ModuleResolutionHost = {
+    fileExists,
+    readFile,
+    directoryExists,
+    getCurrentDirectory,
+  };
+  const service = ts.createLanguageService(
+    {
+      fileExists,
+      readFile,
+      directoryExists,
+      getCompilationSettings: () => options,
+      getScriptFileNames: () => [...files.keys()],
+      getScriptVersion: () => '0',
+      getScriptSnapshot: (file) => {
+        const text = files.get(file);
+        return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
+      },
+      getCurrentDirectory,
+      getDefaultLibFileName: () => '/lib.d.ts',
+      getDirectories: () => [],
+    },
+    ts.createDocumentRegistry(),
+  );
+  const program = service.getProgram();
+  if (!program) throw new Error('The TypeScript language service did not start.');
+
+  // Each changed line belongs to the innermost named declaration around it.
+  const changes = changedLines(input.diff);
+  const changed: { file: string; decl: Declaration; anchorLineId: string }[] = [];
+  for (const [path, lines] of changes) {
+    const source = program.getSourceFile(ROOT + path);
+    if (!source) continue;
+    const declarations = declarationsOf(source);
+    const anchors = new Map<Declaration, string>();
+    for (const { line, lineId } of lines) {
+      let inner: Declaration | null = null;
+      for (const decl of declarations) {
+        if (line < decl.startLine || line > decl.endLine) continue;
+        if (!inner || decl.endLine - decl.startLine < inner.endLine - inner.startLine) inner = decl;
+      }
+      if (inner && !anchors.has(inner)) anchors.set(inner, lineId);
+    }
+    for (const [decl, anchorLineId] of anchors)
+      changed.push({ file: ROOT + path, decl, anchorLineId });
+  }
+  changed.sort((a, b) => a.file.localeCompare(b.file) || a.decl.startLine - b.decl.startLine);
+  const changedAnchors = new Map(
+    changed.map(({ file, decl, anchorLineId }) => [
+      nodeId(relPath(file), decl.namePos),
+      anchorLineId,
+    ]),
+  );
+
+  const nodes = new Map<string, ImpactNode>();
+  const edges = new Map<string, ImpactEdge>();
+  const addItem = (item: ts.CallHierarchyItem): string | null => {
+    const source = program.getSourceFile(item.file);
+    if (!source || !files.has(item.file)) return null;
+    const path = relPath(item.file);
+    const id = nodeId(path, item.selectionSpan.start);
+    if (!nodes.has(id)) {
+      const module =
+        item.kind === ts.ScriptElementKind.moduleElement ||
+        item.kind === ts.ScriptElementKind.scriptElement;
+      const line = (pos: number): number => source.getLineAndCharacterOfPosition(pos).line + 1;
+      const anchorLineId = changedAnchors.get(id) ?? null;
+      nodes.set(id, {
+        id,
+        name: module ? posix.basename(path) : item.name,
+        kind: module ? 'module' : item.kind,
+        container: item.containerName || null,
+        path,
+        startLine: line(item.span.start),
+        endLine: line(item.span.start + item.span.length),
+        changed: anchorLineId !== null,
+        test: isTestPath(path),
+        anchorLineId,
+      });
+    }
+    return id;
+  };
+  const addEdge = (from: string | null, to: string | null): void => {
+    if (from && to) edges.set(`${from}\u0000${to}`, { from, to });
+  };
+
+  for (const { file, decl, anchorLineId } of changed.slice(0, MAX_CHANGED_FUNCTIONS)) {
+    try {
+      const prepared = service.prepareCallHierarchy(file, decl.namePos);
+      const item = Array.isArray(prepared) ? prepared[0] : prepared;
+      if (!item) continue;
+      const self = addItem(item);
+      const node = self ? nodes.get(self) : undefined;
+      if (self && node && !node.changed) {
+        // The service may name a declaration by another span (an object property's key).
+        changedAnchors.set(self, anchorLineId);
+        Object.assign(node, { changed: true, anchorLineId });
+      }
+      for (const call of service.provideCallHierarchyIncomingCalls(file, decl.namePos))
+        addEdge(addItem(call.from), self);
+      for (const call of service.provideCallHierarchyOutgoingCalls(file, decl.namePos))
+        addEdge(self, addItem(call.to));
+    } catch (err) {
+      // One declaration the language service cannot handle must not lose the whole map.
+      console.warn('[impact] call hierarchy failed:', err instanceof Error ? err.name : 'unknown');
+    }
   }
 
-  const changes = changedRanges(input.diff);
-  for (const fn of functions) fn.changed = hasChangedLine(fn, changes);
-  const allEdges: ImpactEdge[] = [];
-  for (const fn of functions) {
-    for (const target of callsOf(fn, byPathName)) allEdges.push({ from: fn.id, to: target.id });
-  }
-
-  const changed = new Set(functions.filter((fn) => fn.changed).map((fn) => fn.id));
-  const selected = new Set(changed);
-  for (const edge of allEdges) {
-    if (changed.has(edge.to)) selected.add(edge.from);
-    if (changed.has(edge.from)) selected.add(edge.to);
-  }
-  const nodes = functions
-    .filter((fn) => selected.has(fn.id))
-    .map((fn) => ({
-      id: fn.id,
-      name: fn.name,
-      path: fn.path,
-      startLine: fn.startLine,
-      endLine: fn.endLine,
-      changed: fn.changed,
-      test: fn.test,
-    }))
-    .sort(
-      (a, b) =>
-        Number(b.changed) - Number(a.changed) ||
-        a.path.localeCompare(b.path) ||
-        a.startLine - b.startLine,
+  const resolved = new Map<string, string | null>();
+  const resolve = (module: string, fromFile: string): string | null => {
+    const key = `${fromFile}\u0000${module}`;
+    if (!resolved.has(key)) {
+      const target = ts.resolveModuleName(module, fromFile, options, moduleHost).resolvedModule;
+      resolved.set(
+        key,
+        target && files.has(target.resolvedFileName) ? relPath(target.resolvedFileName) : null,
+      );
+    }
+    return resolved.get(key) ?? null;
+  };
+  const importsOf = (file: string): ImpactImport[] => {
+    const source = program.getSourceFile(file);
+    if (!source) return [];
+    return source.statements.flatMap((statement) =>
+      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+        ? [
+            {
+              path: relPath(file),
+              module: statement.moduleSpecifier.text,
+              resolvedPath: resolve(statement.moduleSpecifier.text, file),
+            },
+          ]
+        : [],
     );
-  const edges = allEdges.filter((edge) => selected.has(edge.from) && selected.has(edge.to));
+  };
 
-  const changedPaths = new Set(nodes.filter((node) => node.changed).map((node) => node.path));
-  const imports = parsed
-    .filter((file) => changedPaths.has(file.path))
-    .flatMap((file) =>
-      file.imports.map((imp) => ({
-        path: imp.path,
-        module: imp.module,
-        resolvedPath: imp.resolvedPath,
-      })),
-    )
+  const nodeList = [...nodes.values()].sort(
+    (a, b) =>
+      Number(b.changed) - Number(a.changed) ||
+      a.path.localeCompare(b.path) ||
+      a.startLine - b.startLine,
+  );
+  const changedPaths = new Set(nodeList.filter((node) => node.changed).map((node) => node.path));
+  const imports = [...changedPaths]
+    .flatMap((path) => importsOf(ROOT + path))
     .filter(
       (imp, index, all) =>
         all.findIndex((other) => other.path === imp.path && other.module === imp.module) === index,
     );
 
-  const tests: ImpactTest[] = parsed
-    .filter((file) => file.test)
-    .map((file) => {
-      const called = new Set(
-        edges
-          .filter((edge) => {
-            const caller = functions.find((fn) => fn.id === edge.from);
-            return caller?.path === file.path && changed.has(edge.to);
-          })
-          .map((edge) => edge.to),
-      );
-      return {
-        path: file.path,
-        relatedNodeIds: [...called],
-        importsChangedFile: file.imports.some(
-          (imp) => imp.resolvedPath !== null && changedPaths.has(imp.resolvedPath),
+  const edgeList = [...edges.values()];
+  const tests: ImpactTest[] = [...files.keys()]
+    .map(relPath)
+    .filter(isTestPath)
+    .sort()
+    .flatMap((path) => {
+      const relatedNodeIds = [
+        ...new Set(
+          edgeList
+            .filter((edge) => nodes.get(edge.from)?.path === path && nodes.get(edge.to)?.changed)
+            .map((edge) => edge.to),
         ),
-      };
-    })
-    .filter((test) => test.relatedNodeIds.length > 0 || test.importsChangedFile)
-    .map(({ path, relatedNodeIds }) => ({ path, relatedNodeIds }));
+      ];
+      const importsChanged = importsOf(ROOT + path).some(
+        (imp) => imp.resolvedPath !== null && changedPaths.has(imp.resolvedPath),
+      );
+      return relatedNodeIds.length || importsChanged ? [{ path, relatedNodeIds }] : [];
+    });
 
   return {
-    nodes,
-    edges,
+    nodes: nodeList,
+    edges: edgeList,
     imports,
     tests,
-    scannedFiles: sources.length,
+    scannedFiles: files.size,
     skippedFiles: input.skippedFiles,
+    omittedChanged: Math.max(0, changed.length - MAX_CHANGED_FUNCTIONS),
   };
 }

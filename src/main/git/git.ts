@@ -18,14 +18,22 @@ export interface GitService {
    * The least recently used ones beyond the limit are removed.
    */
   worktree(repo: RepoRef, sha: string, name: string): Promise<string>;
-  /** Lists tracked paths at one commit without checking them out. */
-  treePaths(repo: RepoRef, sha: string): Promise<string[]>;
-  /** Reads selected tracked text files at one commit, subject to caller-provided bounds. */
+  /** Lists tracked files at one commit (path and blob ID) without checking them out. */
+  treeEntries(repo: RepoRef, sha: string): Promise<TreeEntry[]>;
+  /**
+   * Reads files at one commit, in the given order until the byte bounds are reached. Blobs the
+   * blobless cache does not hold yet are fetched in one request, not one per file.
+   */
   sourceFiles(
     repo: RepoRef,
     sha: string,
-    paths: string[],
+    entries: TreeEntry[],
   ): Promise<{ path: string; text: string }[]>;
+}
+
+export interface TreeEntry {
+  path: string;
+  oid: string;
 }
 
 export interface GitDirs {
@@ -36,6 +44,7 @@ export interface GitDirs {
 }
 
 const SHA = /^[0-9a-f]{40}$/;
+const OID = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
 const NAME = /^[A-Za-z0-9._-]{1,200}$/;
 const TREE_PATH = /^(?!-)(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\0\r\n]+$/;
 export const MAX_WORKTREES = 10;
@@ -58,7 +67,11 @@ const exists = (p: string): Promise<boolean> =>
     () => false,
   );
 
-type Run = (args: string[], timeoutMs: number) => Promise<string>;
+type Run = (
+  args: string[],
+  timeoutMs: number,
+  opts?: { input?: string; encoding?: 'utf8' | 'latin1' },
+) => Promise<string>;
 
 export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs): GitService {
   // Work on one bare repo must not overlap (shallow and pack locks).
@@ -74,8 +87,15 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
 
   const runner = (tc: Toolchain, git: string): Run => {
     const env = gitEnv(tc);
-    return async (args, timeoutMs) => {
-      const r = await exec({ file: git, args, env, timeoutMs, maxBufferBytes: 256 * 1024 * 1024 });
+    return async (args, timeoutMs, opts) => {
+      const r = await exec({
+        file: git,
+        args,
+        env,
+        timeoutMs,
+        maxBufferBytes: 256 * 1024 * 1024,
+        ...opts,
+      });
       if (r.code !== 0) {
         const first = r.stderr.trim().split('\n')[0]?.slice(0, 200) ?? '';
         if (
@@ -97,7 +117,7 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
     repo: RepoRef,
     shas: string[],
     why: string,
-    fn: (ctx: { run: Run; bare: string; cred: string[] }) => Promise<T>,
+    fn: (ctx: { run: Run; bare: string; cred: string[]; url: string }) => Promise<T>,
   ): Promise<T> => {
     if (!shas.every((s) => SHA.test(s)))
       throw new AppError('BAD_INPUT', 'Expected full commit SHAs.');
@@ -132,7 +152,7 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
         ],
         300_000,
       );
-      return fn({ run, bare, cred });
+      return fn({ run, bare, cred, url });
     });
   };
 
@@ -196,32 +216,96 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
       });
     },
 
-    treePaths: (repo, sha) =>
+    treeEntries: (repo, sha) =>
       withRepo(repo, [sha], 'Impact map', async ({ run, bare }) => {
-        const output = await run(['-C', bare, 'ls-tree', '-r', '--name-only', '-z', sha], 120_000);
-        return output.split('\0').filter((path) => path && TREE_PATH.test(path));
+        const output = await run(['-C', bare, 'ls-tree', '-r', '-z', sha], 120_000);
+        return output.split('\0').flatMap((line) => {
+          // `<mode> <type> <oid>\t<path>`; submodules (commit) and symlinks are not files to read.
+          const match = /^100(?:644|755) blob ([0-9a-f]+)\t(.+)$/s.exec(line);
+          return match?.[1] && match[2] && OID.test(match[1]) && TREE_PATH.test(match[2])
+            ? [{ path: match[2], oid: match[1] }]
+            : [];
+        });
       }),
 
-    sourceFiles: (repo, sha, paths) =>
-      withRepo(repo, [sha], 'Impact map', async ({ run, bare }) => {
-        const sources: { path: string; text: string }[] = [];
-        let usedBytes = 0;
-        for (const path of [...new Set(paths)].filter((candidate) => TREE_PATH.test(candidate))) {
-          const object = `${sha}:${path}`;
-          const sizeText = await run(['-C', bare, 'cat-file', '-s', object], 20_000).catch(
-            () => '',
+    sourceFiles: (repo, sha, entries) =>
+      withRepo(repo, [sha], 'Impact map', async ({ run, bare, cred, url }) => {
+        const wanted = entries.filter((e) => OID.test(e.oid) && TREE_PATH.test(e.path));
+        const oids = [...new Set(wanted.map((e) => e.oid))];
+        if (!oids.length) return [];
+        // `--missing=print` lists what the blobless fetch left on GitHub without fetching it.
+        const listed = await run(
+          ['-C', bare, 'rev-list', '--objects', '--missing=print', sha],
+          120_000,
+        );
+        const missing = new Set(
+          listed
+            .split('\n')
+            .filter((line) => line.startsWith('?'))
+            .map((line) => line.slice(1).split(' ')[0]),
+        );
+        const fetch = oids.filter((oid) => missing.has(oid));
+        if (fetch.length) {
+          // The same request git makes for one lazily fetched blob, for all of them at once.
+          await run(
+            [
+              '-C',
+              bare,
+              ...cred,
+              'fetch',
+              '--quiet',
+              '--no-tags',
+              '--no-write-fetch-head',
+              '--recurse-submodules=no',
+              '--filter=blob:none',
+              '--stdin',
+              url,
+            ],
+            300_000,
+            { input: `${fetch.join('\n')}\n` },
           );
-          const size = Number(sizeText.trim());
-          if (!Number.isSafeInteger(size) || size < 0 || size > MAX_SOURCE_FILE_BYTES) continue;
-          if (usedBytes + size > MAX_SOURCE_BYTES) break;
-          const text = await run(['-C', bare, 'show', '--no-textconv', object], 60_000).catch(
-            () => null,
-          );
-          if (text === null) continue;
-          usedBytes += Buffer.byteLength(text);
-          sources.push({ path, text });
         }
-        return sources;
+
+        const sizes = new Map<string, number>();
+        const checked = await run(['-C', bare, 'cat-file', '--batch-check'], 120_000, {
+          input: `${oids.join('\n')}\n`,
+        });
+        for (const line of checked.split('\n')) {
+          const [oid, type, size] = line.split(' ');
+          if (oid && type === 'blob') sizes.set(oid, Number(size));
+        }
+        const chosen = new Set<string>();
+        let usedBytes = 0;
+        for (const { oid } of wanted) {
+          const size = sizes.get(oid);
+          if (chosen.has(oid) || size === undefined || size > MAX_SOURCE_FILE_BYTES) continue;
+          if (usedBytes + size > MAX_SOURCE_BYTES) break;
+          usedBytes += size;
+          chosen.add(oid);
+        }
+        if (!chosen.size) return [];
+
+        // latin1 keeps one char per byte, so each blob is cut out by its byte size.
+        const output = await run(['-C', bare, 'cat-file', '--batch'], 120_000, {
+          input: `${[...chosen].join('\n')}\n`,
+          encoding: 'latin1',
+        });
+        const texts = new Map<string, string>();
+        for (let pos = 0; pos < output.length;) {
+          const end = output.indexOf('\n', pos);
+          if (end < 0) break;
+          const [oid, type, sizeText] = output.slice(pos, end).split(' ');
+          pos = end + 1;
+          const size = Number(sizeText);
+          if (!oid || type !== 'blob' || !Number.isSafeInteger(size)) continue;
+          const raw = output.slice(pos, pos + size);
+          pos += size + 1;
+          if (!raw.includes('\0')) texts.set(oid, Buffer.from(raw, 'latin1').toString('utf8'));
+        }
+        return wanted.flatMap(({ path, oid }) => {
+          const text = texts.get(oid);
+          return text === undefined ? [] : [{ path, text }];
+        });
       }),
   };
 }

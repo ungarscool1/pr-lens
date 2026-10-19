@@ -9,6 +9,7 @@ import { execFileRunner } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
 import { createDeepDive } from './deepdive/deepdive';
 import { createGit } from './git/git';
+import { analyzeInWorker } from './impact/run-worker';
 import { createImpactService } from './impact/service';
 import { createPromote } from './promote/promote';
 import { createWriteClient } from './promote/write-client';
@@ -75,7 +76,7 @@ async function createServices(): Promise<void> {
     settings,
     sessionsDir: join(data, 'sessions'),
   });
-  const impact = createImpactService(git, review);
+  const impact = createImpactService({ git, review, cache, analyze: analyzeInWorker });
   // The write client exists only for promote; nothing else can reach a GitHub mutation.
   const promote = createPromote({
     write: createWriteClient(execFileRunner, toolchain),
