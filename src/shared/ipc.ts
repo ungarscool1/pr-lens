@@ -102,6 +102,10 @@ export const contract = {
     input: z.object({ targetKey: TargetKey }).strict(),
     output: z.custom<ImpactMap>(),
   },
+  'diff:fileLines': {
+    input: z.object({ targetKey: TargetKey, fid: z.string().regex(/^F[0-9]{1,6}$/) }).strict(),
+    output: z.custom<{ lines: string[] }>(),
+  },
   'notes:list': { input: z.object({ subject: Subject }).strict(), output: z.custom<NotesFile>() },
   'notes:create': { input: CreateNoteInput, output: z.custom<PrivateNote>() },
   'notes:delete': { input: DeleteNoteInput, output: z.custom<void>() },

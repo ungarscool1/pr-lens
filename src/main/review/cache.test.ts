@@ -200,6 +200,7 @@ describe('review service with the cache', () => {
         worktree: () => Promise.reject(new Error('unused')),
         treeEntries: () => Promise.reject(new Error('unused')),
         sourceFiles: () => Promise.reject(new Error('unused')),
+        filesAt: () => Promise.reject(new Error('unused')),
       },
       claude,
       settings: settingsService(s),

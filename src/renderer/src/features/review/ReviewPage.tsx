@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
-import { noiseKind } from '../../../../shared/diff';
+import { canExpand, noiseKind } from '../../../../shared/diff';
 import type { OpenResult, PromotePreview } from '../../../../shared/ipc';
 import type { ReviewDecision } from '../../../../shared/ipc';
 import type { ImpactNode } from '../../../../shared/impact';
@@ -22,6 +22,7 @@ import { PrHeader } from './PrHeader';
 import { SummaryCard } from './SummaryCard';
 import { Sidebar } from './Sidebar';
 import { api, errorMessage, openExternal, run } from '../../lib/api';
+import { useExpansion } from './useExpansion';
 import { useReview } from './useReview';
 import type { ReviewState, Source } from './useReview';
 
@@ -192,6 +193,7 @@ function LoadedReview({
   } | null>(null);
 
   const files = open.diff.files;
+  const { expansions, expand, reveal } = useExpansion(open.target.key);
   const risks = useMemo(
     () => new Map<string, FileRisk>((analysis?.files ?? []).map((f) => [f.fid, f])),
     [analysis],
@@ -290,6 +292,17 @@ function LoadedReview({
     setContent('diff');
     openFile(file.fid);
     if (file.noise !== null) setLoadedNoise((s) => ({ ...s, [file.fid]: true }));
+    if (!target && canExpand(file)) {
+      // Unchanged in this file: reveal the function's lines around the hunks, then go there.
+      void reveal(file, from, to).then((ok) =>
+        setScrollTo(
+          ok
+            ? { id: lineDomId(`${file.fid}-x${from}`), focus: false, flash: true }
+            : { id: fileDomId(file.fid), focus: false },
+        ),
+      );
+      return true;
+    }
     setScrollTo(
       target
         ? { id: lineDomId(target), focus: false, flash: true }
@@ -625,6 +638,8 @@ function LoadedReview({
                   viewed={!!viewed[f.fid]}
                   currentNoteId={current}
                   composer={composer?.fid === f.fid ? composer : null}
+                  expansion={expansions[f.fid]}
+                  onExpand={expand}
                   onToggleOpen={() => {
                     const isOpen = !closed[f.fid] && !viewed[f.fid];
                     setClosed((c) => ({ ...c, [f.fid]: isOpen }));
@@ -656,6 +671,8 @@ function LoadedReview({
                     viewed={false}
                     currentNoteId={current}
                     composer={composer?.fid === f.fid ? composer : null}
+                    expansion={expansions[f.fid]}
+                    onExpand={expand}
                     onToggleOpen={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
                     onToggleViewed={() => setLoadedNoise((s) => ({ ...s, [f.fid]: false }))}
                     onCompose={setComposer}

@@ -5,8 +5,11 @@ import type { NoteState } from '../../../../shared/notes';
 import type { FileRisk } from '../../../../shared/review';
 import { Icon, SevTag } from '../../ds';
 import type { Tok } from '../../lib/highlight';
+import { EXPAND_STEP } from './expand';
+import type { ExpandDir } from './expand';
 import { buildRows, highlightedLines } from './model';
 import type { Cell, ComposerAt, Row, ViewMode, ViewNote } from './model';
+import type { FileExpansion } from './useExpansion';
 import { Composer, NoteRow } from './NoteView';
 import type { RefTarget } from './NoteView';
 
@@ -23,6 +26,8 @@ interface Props {
   viewed: boolean;
   currentNoteId: string | null;
   composer: ComposerAt | null;
+  expansion: FileExpansion | undefined;
+  onExpand: (fid: string, gap: number, dir: ExpandDir) => void;
   onToggleOpen: () => void;
   onToggleViewed: () => void;
   onCompose: (at: ComposerAt | null) => void;
@@ -39,6 +44,12 @@ interface Props {
 
 const MARK = { add: '+', del: '−', ctx: '' } as const;
 
+const EXPAND = {
+  down: { icon: 'chevronDown', label: `Expand down: show ${EXPAND_STEP} more unchanged lines` },
+  up: { icon: 'chevronUp', label: `Expand up: show ${EXPAND_STEP} more unchanged lines` },
+  all: { icon: 'expand', label: 'Show all hidden unchanged lines' },
+} as const;
+
 function Code({ toks }: { toks: Tok[] }) {
   return (
     <>
@@ -54,18 +65,22 @@ function Code({ toks }: { toks: Tok[] }) {
 const kindClass = (c: Cell | null): string =>
   !c ? 'c-empty' : c.line.kind === 'ctx' ? '' : `c-${c.line.kind}`;
 
-/** Row anchors for keyboard navigation: one per line row (the right side wins in split view). */
+/**
+ * Row anchors for keyboard navigation: one per diff line row (the right side wins in split view).
+ * Revealed unchanged lines are not in the diff, so notes cannot anchor there.
+ */
 const anchorOf = (r: Row): ComposerAt | null => {
   const c = r.kind === 'line' ? r.cell : r.kind === 'pair' ? (r.right ?? r.left) : null;
-  return c ? { fid: '', side: c.side, line: c.num, lineId: c.line.id } : null;
+  return c && !c.extra ? { fid: '', side: c.side, line: c.num, lineId: c.line.id } : null;
 };
 
 function DiffFileView(p: Props) {
   const { file } = p;
   const [active, setActive] = useState<number | null>(null);
+  const { expansion } = p;
   const rows = useMemo(
-    () => (p.open ? buildRows(file, p.notes, p.mode, p.composer) : []),
-    [file, p.notes, p.mode, p.composer, p.open],
+    () => (p.open ? buildRows(file, p.notes, p.mode, p.composer, expansion ?? null) : []),
+    [file, p.notes, p.mode, p.composer, p.open, expansion],
   );
   const hl = useMemo(() => highlightedLines(p.notes, p.noteState), [p.notes, p.noteState]);
   const lineRows = useMemo(
@@ -128,25 +143,45 @@ function DiffFileView(p: Props) {
   const renderRow = (r: Row, i: number): ReactNode => {
     const isActive = i === active;
     switch (r.kind) {
-      case 'hunk':
+      case 'hunk': {
+        const busy = !!expansion?.loading;
+        const failed = r.actions.length ? expansion?.error : null;
         return (
-          <div key={r.key} className="hunk">
-            <span className="hunk-expand" title="Expanding context arrives after the MVP">
-              <Icon name="expand" />
+          <div key={r.key} className="hunk" aria-busy={busy || undefined}>
+            <span className="hunk-expand">
+              {r.actions.map((dir) => (
+                <button
+                  key={dir}
+                  type="button"
+                  className="hunk-expand-btn"
+                  title={EXPAND[dir].label}
+                  aria-label={EXPAND[dir].label}
+                  disabled={busy}
+                  onClick={() => p.onExpand(file.fid, r.gap, dir)}
+                >
+                  <Icon name={EXPAND[dir].icon} />
+                </button>
+              ))}
             </span>
-            <span className="hunk-text">{r.header}</span>
+            <span
+              className={`hunk-text ${failed ? 'hunk-error' : ''}`}
+              role={failed ? 'alert' : undefined}
+            >
+              {failed ?? (busy && r.actions.length ? 'Loading lines…' : r.header)}
+            </span>
           </div>
         );
+      }
       case 'line': {
         const c = r.cell;
         return (
           <div
             key={r.key}
             id={`row-${file.fid}-${i}`}
-            className={`dl ${kindClass(c)} ${isActive ? 'active' : ''}`}
+            className={`dl ${kindClass(c)} ${c.extra ? 'extra' : ''} ${isActive ? 'active' : ''}`}
           >
             {numCell(c, 'o')}
-            {numCell(c, 'n', c)}
+            {numCell(c, 'n', c.extra ? null : c)}
             <span className={`mark ${kindClass(c)}`}>{MARK[c.line.kind]}</span>
             <span className="code" id={lineDomId(c.line.id)}>
               <Code toks={c.toks} />
@@ -159,7 +194,7 @@ function DiffFileView(p: Props) {
           <div
             key={r.key}
             id={`row-${file.fid}-${i}`}
-            className={`dl pair ${isActive ? 'active' : ''}`}
+            className={`dl pair ${r.right?.extra ? 'extra' : ''} ${isActive ? 'active' : ''}`}
           >
             {numCell(r.left, 'l')}
             <span className={`mark ${kindClass(r.left)}`}>
@@ -171,7 +206,7 @@ function DiffFileView(p: Props) {
             >
               {r.left && <Code toks={r.left.toks} />}
             </span>
-            {numCell(r.right, 'r', r.right ?? r.left)}
+            {numCell(r.right, 'r', r.right?.extra ? null : (r.right ?? r.left))}
             <span className={`mark ${kindClass(r.right)}`}>
               {r.right ? MARK[r.right.line.kind] : ''}
             </span>

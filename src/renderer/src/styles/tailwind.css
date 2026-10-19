@@ -1267,15 +1267,46 @@
     background: var(--a1);
     color: var(--a8);
     line-height: 30px;
+    min-height: 30px;
   }
   .split .hunk {
     grid-template-columns: 76px minmax(0, 1fr);
   }
   .hunk-expand {
-    display: grid;
-    place-items: center;
+    display: flex;
     background: var(--a2);
     color: var(--a7);
+  }
+  .hunk-expand-btn {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .hunk-expand-btn + .hunk-expand-btn {
+    border-left: 1px solid var(--a3);
+  }
+  .hunk-expand-btn:hover {
+    background: var(--a3);
+    color: var(--a9);
+  }
+  .hunk-expand-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .hunk-expand-btn:disabled {
+    cursor: progress;
+    opacity: 0.5;
+  }
+  .hunk-error {
+    color: var(--del-mark);
+  }
+  .dl.extra .num {
+    background: var(--n2);
   }
   .hunk-text {
     padding: 0 12px;

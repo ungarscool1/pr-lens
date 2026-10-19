@@ -40,7 +40,7 @@ renderer can match events that arrive before `review:start` has replied.
 - `src/main/exec/toolchain.ts` builds the child environments from allow-lists. `claude` gets
   `PATH`, `HOME`, locale vars and, if set, `CLAUDE_CODE_OAUTH_TOKEN`; nothing else.
 - `src/main/git/git.ts` is used for direct (two-dot) compares of diverged refs (GitHub's
-  compare API has no two-dot diff), deep-dive worktrees and the impact map's snapshot reads.
+  compare API has no two-dot diff), deep-dive worktrees, the impact map's snapshot reads and expanded diff context.
   It keeps a bare cache repo per GitHub repo, fetches just the needed SHAs
   (`--depth=1 --filter=blob:none`), and `git diff`s them; git fetches the blobs it needs on
   demand. Credentials come from `gh auth git-credential`, never a prompt
@@ -178,6 +178,24 @@ wrappers over those classes. The diff uses blue additions and red deletions, wit
 and labels so the state is never conveyed by colour alone. `features/review/model.ts` holds the
 pure view logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
 
+### Expanding unchanged lines
+
+Each hunk header has GitHub's expand buttons: up and down reveal 20 more unchanged lines from the
+hunk on that side, and one "show all" replaces them once the rest of the gap fits in a step. The
+end of the file has its own row. Added, deleted and binary files have nothing hidden.
+
+1. The first click on a file calls `diff:fileLines` with the target key and the file's `F` ID,
+   never a path: main looks the file up in the loaded diff and reads it at the head SHA with
+   `git.filesAt` (`ls-tree` with literal pathspecs, then the impact map's batched blob reader,
+   same size bounds). `src/main/diff/context.ts`.
+2. `features/review/expand.ts` (pure, tested) works out the gaps from the hunk headers: gap `i`
+   before hunk `i`, one after the last, each with its old-side offset (nothing in a gap changed,
+   so old = new + offset). `buildRows` emits the revealed lines as context lines marked `extra`;
+   notes cannot anchor on them, since they are not in the diff the review saw.
+3. `useExpansion` keeps the text and reveals per file for the loaded target. A function the impact
+   map points at in a diff file but outside its hunks is revealed the shorter way into its gap,
+   then centred, instead of only scrolling to the file.
+
 ### Function impact map
 
 The Review toolbar has an **Impact** mode: a call graph of the changed functions, their direct
@@ -205,8 +223,8 @@ callers and their direct callees. It is built locally and deterministically, wit
    functions (chained left to right by longest path, cycles drawn as dashed back edges),
    callees; rows follow file order, then barycenter passes. `ImpactView` draws it as SVG edges
    under HTML buttons. Clicking a changed function switches to Diff mode and centres its first
-   changed line; a function elsewhere in the diff goes to its lines or file; one outside the
-   diff opens on GitHub at the head SHA.
+   changed line; a function elsewhere in the diff goes to its lines, revealing them when they
+   sit between hunks; one outside the diff opens on GitHub at the head SHA.
 
 #### Other languages: the user's own language servers (`src/main/impact/lsp`)
 

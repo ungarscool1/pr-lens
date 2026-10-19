@@ -8,6 +8,7 @@ import type { ReviewEvent } from '../shared/review';
 import { execFileRunner, spawnStdio } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
 import { createDeepDive } from './deepdive/deepdive';
+import { createContextService } from './diff/context';
 import { createGit } from './git/git';
 import { analyzeInWorker } from './impact/run-worker';
 import { createServerRunner } from './impact/lsp/runner';
@@ -87,6 +88,7 @@ async function createServices(): Promise<void> {
       run: createServerRunner(toolchain, spawnStdio),
     },
   });
+  const context = createContextService({ git, review });
   // The write client exists only for promote; nothing else can reach a GitHub mutation.
   const promote = createPromote({
     write: createWriteClient(execFileRunner, toolchain),
@@ -96,7 +98,7 @@ async function createServices(): Promise<void> {
     settings,
   });
   registerIpc(
-    { toolchain, github, claude, settings, review, notes, deepDive, promote, impact },
+    { toolchain, github, claude, settings, review, notes, deepDive, promote, impact, context },
     isTrustedSender,
   );
 }

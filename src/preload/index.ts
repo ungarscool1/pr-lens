@@ -36,6 +36,7 @@ const api = {
     },
   },
   impact: { get: call('impact:get') },
+  diff: { fileLines: call('diff:fileLines') },
   notes: {
     list: call('notes:list'),
     create: call('notes:create'),
