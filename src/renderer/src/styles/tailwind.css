@@ -2286,6 +2286,46 @@
     border-style: dashed;
     background: transparent;
   }
+  .impact-languages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .impact-language {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 2px 8px;
+    padding: 7px 11px;
+    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    border-radius: 8px;
+    background: var(--n1);
+    font-size: 12.5px;
+  }
+  .impact-language span {
+    font: 11px var(--font-mono);
+    color: var(--n7);
+    align-self: center;
+  }
+  .impact-language small {
+    grid-column: 1/-1;
+    max-width: 420px;
+    color: var(--n7);
+  }
+  .impact-language.mapped span {
+    color: var(--a7);
+  }
+  .impact-language.failed {
+    border-color: var(--del-mark);
+  }
+  .impact-language.failed span {
+    color: var(--del-mark);
+  }
+  .impact-language.off {
+    border-style: dashed;
+  }
   .impact-graph {
     flex: none;
     max-height: min(70vh, 760px);

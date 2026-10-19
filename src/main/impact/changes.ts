@@ -3,7 +3,10 @@ import type { DiffModel } from '../../shared/diff';
 // Kept apart from analysis.ts so the main process can use these without loading the compiler.
 
 /** Bump when the analysis changes what it finds; persisted maps from older versions are a miss. */
-export const ANALYZER_VERSION = 2;
+export const ANALYZER_VERSION = 3;
+
+/** Changed declarations expanded into the graph; the rest are counted, not drawn. */
+export const MAX_CHANGED_FUNCTIONS = 60;
 
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/i;
 const NOT_SOURCE =
@@ -16,17 +19,20 @@ export const isTestPath = (path: string): boolean => TEST_FILE.test(path);
 export const isConfigPath = (path: string): boolean =>
   /^(?:tsconfig(?:\.[\w-]+)?|jsconfig)\.json$/.test(path);
 
-interface ChangedLine {
+export interface ChangedLine {
   /** Line in the new file; a deletion sits on the line that now follows it. */
   line: number;
   lineId: string;
 }
 
 /** Added and deleted lines per file, in new-file coordinates. Context lines never count. */
-export function changedLines(diff: DiffModel): Map<string, ChangedLine[]> {
+export function changedLines(
+  diff: DiffModel,
+  isSource: (path: string) => boolean = isImpactSource,
+): Map<string, ChangedLine[]> {
   const result = new Map<string, ChangedLine[]>();
   for (const file of diff.files) {
-    if (!isImpactSource(file.path) || file.binary || file.status === 'deleted') continue;
+    if (!isSource(file.path) || file.binary || file.status === 'deleted') continue;
     const lines: ChangedLine[] = [];
     for (const hunk of file.hunks) {
       let lastNew = 0;

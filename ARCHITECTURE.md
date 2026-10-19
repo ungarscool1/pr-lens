@@ -208,9 +208,34 @@ callers and their direct callees. It is built locally and deterministically, wit
    changed line; a function elsewhere in the diff goes to its lines or file; one outside the
    diff opens on GitHub at the head SHA.
 
-Other languages would plug in behind the same `ImpactMap`: the call hierarchy is a standard
-LSP request, but running gopls, pyright and the like needs a checkout and installed
-dependencies, which this does not.
+#### Other languages: the user's own language servers (`src/main/impact/lsp`)
+
+Call hierarchy is a standard LSP request, so Go and Python changes are mapped by a language
+server the user installed. PR Lens ships none and never searches PATH for one: a language is
+mapped only after its server's absolute path is set in Settings (`lspPaths`). Each language has
+a fixed launch recipe (`presets.ts`, args and env); an arbitrary command line is not offered.
+
+1. `service.ts` checks out the head once (`git.worktree`, named `impact__<owner>__<repo>__<sha12>`,
+   sharing the deep-dive LRU) and clears every execute bit in it (`checkout.ts`, links skipped).
+   A server or the tool it calls cannot then run a binary the PR ships, such as a committed
+   `.venv/bin/python`.
+2. `runner.ts` checks the path is executable and spawns it through `exec.ts`'s `spawnStdio`
+   (no shell, base env allow-list plus the preset's values). For Go those are
+   `GOTOOLCHAIN=local` (a `toolchain` line cannot download another Go), `GOPROXY=off` (only
+   the user's module cache and `vendor/`) and `CGO_ENABLED=0`.
+3. `analyze.ts` speaks JSON-RPC (`rpc.ts`): `initialize`, `didOpen` for changed files, waits
+   for `$/progress` to go quiet, then `documentSymbol` to find the innermost function or method
+   around each changed line and `prepareCallHierarchy` with incoming and outgoing calls. Items
+   outside the checkout (standard library, dependencies) are dropped. It stops the server after
+   3 minutes.
+4. Results merge with the TypeScript map. `ImpactMap.languages` says per language whether it was
+   mapped, failed (with the reason), or is off because no server is set. A map with a failed
+   server is not stored, so a fixed path or a less busy server gets another try; the stored
+   key includes the configured paths.
+
+Rust is deliberately not offered: rust-analyzer's `cargo metadata` honours the repository's
+`.cargo/config.toml` (`rustc-wrapper`), and build scripts and proc macros are PR code. Adding a
+language means a preset whose server can load an untrusted checkout without running it.
 
 For PRs, a separate read-only `github:prContext` call loads submitted review decisions, requested
 reviewers, unresolved review threads, the head commit's check rollup, and base-branch CODEOWNERS

@@ -107,6 +107,7 @@ describe('createAnalysisCache', () => {
       scannedFiles: 3,
       skippedFiles: 0,
       omittedChanged: 0,
+      languages: [],
     };
     await cache.putImpact(ref, HEAD, 'k1', map);
     await expect(cache.getImpact(ref, HEAD, 'k1')).resolves.toEqual(map);

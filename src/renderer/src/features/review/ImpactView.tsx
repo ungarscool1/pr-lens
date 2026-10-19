@@ -163,7 +163,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
     <section className="impact-page" aria-label="Function impact map">
       <header className="impact-head">
         <div>
-          <span className="card-kicker">TypeScript call hierarchy</span>
+          <span className="card-kicker">Call hierarchy</span>
           <h2>Function impact</h2>
           <p>
             {changed} changed · {map.nodes.length - changed} connected · {map.scannedFiles} source
@@ -177,6 +177,23 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
           <span className="impact-swatch outside">Elsewhere · opens on GitHub</span>
         </div>
       </header>
+      {map.languages.length > 0 && (
+        <ul className="impact-languages" aria-label="Languages">
+          {map.languages.map((language) => (
+            <li key={language.language} className={`impact-language ${language.status}`}>
+              <b>{language.label}</b>
+              <span>
+                {language.status === 'mapped'
+                  ? `mapped · ${language.detail ?? ''}`
+                  : language.status === 'off'
+                    ? 'not mapped'
+                    : 'failed'}
+              </span>
+              {language.status !== 'mapped' && language.detail && <small>{language.detail}</small>}
+            </li>
+          ))}
+        </ul>
+      )}
       {map.omittedChanged > 0 && (
         <p className="impact-none">
           {map.omittedChanged} more changed function{map.omittedChanged === 1 ? ' is' : 's are'} not
@@ -185,7 +202,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
       )}
       {!changed ? (
         <p className="impact-empty">
-          No changed TypeScript or JavaScript functions were found in this diff.
+          No changed functions were found in the languages mapped for this diff.
         </p>
       ) : (
         <ImpactGraph map={map} diffPaths={diffPaths} onOpen={onOpenNode} />
@@ -239,9 +256,10 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
         </section>
       </div>
       <p className="impact-disclaimer">
-        Built locally from the head commit with the TypeScript language service, the same call
-        hierarchy an editor shows. Calls through untyped values, dynamic dispatch, or packages
-        outside this repository are not drawn rather than guessed.
+        Built locally from the head commit with each language's call hierarchy, the same one an
+        editor shows: TypeScript's built in, others from the language servers set in Settings. Calls
+        the language service cannot resolve, or into code outside this repository, are not drawn
+        rather than guessed.
       </p>
     </section>
   );

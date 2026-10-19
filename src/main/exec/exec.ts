@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { AppError } from '../../shared/errors';
 
 export interface ExecRequest {
@@ -68,3 +69,26 @@ export const execFileRunner: Exec = (req) =>
   });
 
 const commandName = (file: string): string => file.split('/').pop() ?? file;
+
+export interface SpawnRequest {
+  file: string;
+  args: readonly string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  signal: AbortSignal;
+}
+
+export type SpawnStdio = (req: SpawnRequest) => ChildProcessWithoutNullStreams;
+
+/**
+ * A long-lived child spoken to over stdin/stdout (a language server). Same rules as execFile:
+ * no shell, explicit env, and the signal kills it.
+ */
+export const spawnStdio: SpawnStdio = (req) =>
+  spawn(req.file, req.args, {
+    cwd: req.cwd,
+    env: req.env,
+    signal: req.signal,
+    stdio: 'pipe',
+    windowsHide: true,
+  });

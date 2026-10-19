@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 /**
- * A function-level call graph around the changed code, built locally by the TypeScript language
- * service (the call hierarchy an editor's LSP shows). No model is involved.
+ * A function-level call graph around the changed code, built locally from a language service's
+ * call hierarchy (what an editor's LSP shows): TypeScript's built in, others from a language
+ * server the user installed. No model is involved.
  */
 export const ImpactNode = z.object({
   /** `<path>#<offset of the declaration name>`: unique and stable for one head SHA. */
@@ -45,6 +46,16 @@ export const ImpactTest = z.object({
 });
 export type ImpactTest = z.infer<typeof ImpactTest>;
 
+export const ImpactLanguage = z.object({
+  /** `typescript`, or an LSP language id. */
+  language: z.string(),
+  label: z.string(),
+  /** `off`: changed files in this language, but no language server is set up for it. */
+  status: z.enum(['mapped', 'failed', 'off']),
+  detail: z.string().nullable(),
+});
+export type ImpactLanguage = z.infer<typeof ImpactLanguage>;
+
 export const ImpactMap = z.object({
   /** Changed functions and their direct callers and callees. */
   nodes: z.array(ImpactNode),
@@ -57,5 +68,7 @@ export const ImpactMap = z.object({
   skippedFiles: z.number().int().nonnegative(),
   /** Changed functions left out of the graph to keep it bounded. */
   omittedChanged: z.number().int().nonnegative(),
+  /** One entry per language with changed source files. */
+  languages: z.array(ImpactLanguage),
 });
 export type ImpactMap = z.infer<typeof ImpactMap>;

@@ -8,7 +8,7 @@ import type {
   ImpactNode,
   ImpactTest,
 } from '../../shared/impact';
-import { changedLines, isImpactSource, isTestPath } from './changes';
+import { changedLines, isImpactSource, isTestPath, MAX_CHANGED_FUNCTIONS } from './changes';
 
 export interface SourceText {
   path: string;
@@ -22,9 +22,6 @@ export interface ImpactInput {
   /** Root `tsconfig*.json` / `jsconfig.json` texts by path, for `paths` and `baseUrl`. */
   configs: SourceText[];
 }
-
-/** Changed declarations expanded into the graph; the rest are counted, not drawn. */
-export const MAX_CHANGED_FUNCTIONS = 60;
 
 const ROOT = '/repo/';
 
@@ -357,5 +354,6 @@ export function analyzeImpact(input: ImpactInput): ImpactMap {
     scannedFiles: files.size,
     skippedFiles: input.skippedFiles,
     omittedChanged: Math.max(0, changed.length - MAX_CHANGED_FUNCTIONS),
+    languages: [],
   };
 }
