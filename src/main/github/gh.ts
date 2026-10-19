@@ -182,21 +182,7 @@ const PR_CONTEXT_QUERY = `query($owner: String!, $name: String!, $number: Int!) 
         nodes { path }
         pageInfo { hasNextPage }
       }
-      baseRef {
-        target {
-          ... on Commit {
-            dotGitHubCodeowners: file(path: ".github/CODEOWNERS") {
-              object { ... on Blob { text } }
-            }
-            rootCodeowners: file(path: "CODEOWNERS") {
-              object { ... on Blob { text } }
-            }
-            docsCodeowners: file(path: "docs/CODEOWNERS") {
-              object { ... on Blob { text } }
-            }
-          }
-        }
-      }
+      baseRefOid
       commits(last: 1) {
         nodes {
           commit {
@@ -228,9 +214,6 @@ const RequestedReviewerJson = z
       organization: z.object({ login: z.string() }),
     }),
   ])
-  .nullable();
-const CodeownersFileJson = z
-  .object({ object: z.object({ text: z.string().nullable() }).nullable() })
   .nullable();
 const PrContextJson = z.object({
   data: z.object({
@@ -278,17 +261,7 @@ const PrContextJson = z.object({
             nodes: z.array(z.object({ path: z.string() })),
             pageInfo: PageInfoJson,
           }),
-          baseRef: z
-            .object({
-              target: z
-                .object({
-                  dotGitHubCodeowners: CodeownersFileJson.optional(),
-                  rootCodeowners: CodeownersFileJson.optional(),
-                  docsCodeowners: CodeownersFileJson.optional(),
-                })
-                .nullable(),
-            })
-            .nullable(),
+          baseRefOid: z.string(),
           commits: z.object({
             nodes: z.array(
               z.object({
@@ -379,6 +352,25 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
     }
   };
   const repoFlag = (r: { owner: string; repo: string }): string => `--repo=${r.owner}/${r.repo}`;
+  const loadCodeowners = async (
+    ref: PrRef,
+    baseSha: string,
+  ): Promise<[path: string, text: string] | null> => {
+    for (const path of ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS']) {
+      const text = await optionalGh([
+        'api',
+        '--method',
+        'GET',
+        `repos/${ref.owner}/${ref.repo}/contents/${path}`,
+        '-f',
+        `ref=${baseSha}`,
+        '-H',
+        'Accept: application/vnd.github.raw+json',
+      ]);
+      if (text !== null) return [path, text];
+    }
+    return null;
+  };
 
   const linkedIssue = async (
     owner: string,
@@ -479,12 +471,7 @@ export function createGhClient(exec: Exec, toolchain: ToolchainService): GitHubC
       const pr = PrContextJson.parse(JSON.parse(out)).data.repository.pullRequest;
       if (!pr) throw new AppError('NOT_FOUND', 'Pull request not found.');
       const rollup = pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts;
-      const base = pr.baseRef?.target;
-      const codeowners = [
-        ['.github/CODEOWNERS', base?.dotGitHubCodeowners?.object?.text],
-        ['CODEOWNERS', base?.rootCodeowners?.object?.text],
-        ['docs/CODEOWNERS', base?.docsCodeowners?.object?.text],
-      ].find((entry): entry is [string, string] => typeof entry[1] === 'string');
+      const codeowners = await loadCodeowners(ref, pr.baseRefOid);
       return {
         requestedReviewers: pr.reviewRequests.nodes.flatMap<GitHubRequestedReviewer>((request) => {
           const reviewer = request.requestedReviewer;

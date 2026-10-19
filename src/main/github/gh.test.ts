@@ -59,6 +59,16 @@ describe('GitHub Inbox', () => {
 describe('GitHub PR context', () => {
   it('returns submitted reviews, unresolved threads and check status without a write', async () => {
     const exec: Exec = vi.fn(async ({ args }) => {
+      if (args.includes('repos/acme/api/contents/.github/CODEOWNERS')) {
+        return { code: 1, stdout: '', stderr: 'HTTP 404: Not Found' };
+      }
+      if (args.includes('repos/acme/api/contents/CODEOWNERS')) {
+        return {
+          code: 0,
+          stdout: 'src/** @acme/platform\ndocs/ @writer\n',
+          stderr: '',
+        };
+      }
       if (!args.includes('graphql')) throw new Error(`Unexpected call: ${args.join(' ')}`);
       return {
         code: 0,
@@ -131,15 +141,7 @@ describe('GitHub PR context', () => {
                   nodes: [{ path: 'src/auth.ts' }, { path: 'docs/guide.md' }],
                   pageInfo: { hasNextPage: false },
                 },
-                baseRef: {
-                  target: {
-                    dotGitHubCodeowners: {
-                      object: { text: 'src/** @acme/platform\ndocs/ @writer\n' },
-                    },
-                    rootCodeowners: null,
-                    docsCodeowners: null,
-                  },
-                },
+                baseRefOid: 'abc123',
                 commits: {
                   nodes: [
                     {
@@ -183,7 +185,7 @@ describe('GitHub PR context', () => {
         { kind: 'team', handle: 'acme/platform' },
       ],
       ownership: {
-        sourcePath: '.github/CODEOWNERS',
+        sourcePath: 'CODEOWNERS',
         rules: [
           { pattern: 'src/**', owners: ['@acme/platform'], paths: ['src/auth.ts'] },
           { pattern: 'docs/', owners: ['@writer'], paths: ['docs/guide.md'] },
@@ -226,6 +228,17 @@ describe('GitHub PR context', () => {
     );
     const graphqlCall = vi.mocked(exec).mock.calls[0]?.[0];
     const query = graphqlCall?.args.find((arg) => arg.startsWith('query='));
-    expect(query).toContain('object { ... on Blob { text } }');
+    expect(query).toContain('baseRefOid');
+    expect(query).not.toContain('file(path:');
+    expect(exec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: expect.arrayContaining([
+          '--method',
+          'GET',
+          'repos/acme/api/contents/CODEOWNERS',
+          'ref=abc123',
+        ]),
+      }),
+    );
   });
 });
