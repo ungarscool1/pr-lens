@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile as DiffFileModel } from '../../../../shared/diff';
 import { noiseKind } from '../../../../shared/diff';
 import type { OpenResult, PromotePreview } from '../../../../shared/ipc';
@@ -25,6 +25,88 @@ import type { ReviewState, Source } from './useReview';
 
 type Density = 'comfortable' | 'compact';
 type ReviewContent = 'diff' | 'impact';
+
+function DisplayOptions({
+  mode,
+  density,
+  onMode,
+  onDensity,
+}: {
+  mode: ViewMode;
+  density: Density;
+  onMode: (mode: ViewMode) => void;
+  onDensity: (density: Density) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="toolbar-display" ref={root}>
+      <button
+        ref={trigger}
+        type="button"
+        className="btn btn-secondary toolbar-display-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Diff display options"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name="settings" />
+        <span className="toolbar-display-trigger-label">Display</span>
+        <Icon name="chevronDown" style={{ transform: open ? 'rotate(180deg)' : undefined }} />
+      </button>
+      {open && (
+        <div className="toolbar-display-menu" role="dialog" aria-label="Diff display options">
+          <div className="toolbar-display-option">
+            <span>Layout</span>
+            <Seg<ViewMode>
+              name="view"
+              label="Diff layout"
+              value={mode}
+              onChange={onMode}
+              options={[
+                { value: 'unified', label: 'Unified' },
+                { value: 'split', label: 'Split' },
+              ]}
+            />
+          </div>
+          <div className="toolbar-display-option">
+            <span>Density</span>
+            <Seg<Density>
+              name="density"
+              label="Review density"
+              value={density}
+              onChange={onDensity}
+              options={[
+                { value: 'comfortable', label: 'Comfortable' },
+                { value: 'compact', label: 'Compact' },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const sourceLabel = (s: Source): string =>
   s.kind === 'pr' ? s.input : `${s.owner}/${s.repo} ${s.base} → ${s.head}`;
@@ -305,6 +387,13 @@ function LoadedReview({
   const unseen = allNotes.filter(
     (n) => !noteState[n.id]?.seen && !noteState[n.id]?.dismissed,
   ).length;
+  const filterOptions: { value: Filter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: allNotes.length },
+    { value: 'unseen', label: 'Unseen', count: unseen },
+    { value: 'high', label: 'High', count: stats.high },
+    { value: 'medium', label: 'Medium', count: stats.medium },
+    { value: 'mine', label: 'Mine', count: stats.mine },
+  ];
   const summary = (
     <SummaryCard
       estimate={open.estimate}
@@ -345,7 +434,7 @@ function LoadedReview({
         onRerun={() => review.runReview(true)}
       />
       <div className="review-main-wrap">
-        <main className={`review-main review-content-${content}`}>
+        <main className="review-main">
           {open.header.kind === 'compare' ? (
             <CompareHeader
               meta={open.header.meta}
@@ -395,7 +484,7 @@ function LoadedReview({
                 <>
                   <div className="viewed">
                     <span>
-                      {viewedCount}/{reviewed.length} viewed
+                      {viewedCount}/{reviewed.length} <span className="viewed-label">viewed</span>
                     </span>
                     <span className="viewed-bar" aria-hidden="true">
                       <span
@@ -405,101 +494,77 @@ function LoadedReview({
                       />
                     </span>
                   </div>
-                  <Seg<Filter>
-                    name="filter"
-                    label="Filter notes"
-                    value={filter}
-                    onChange={setFilter}
-                    options={[
-                      {
-                        value: 'all',
+                  <div className="toolbar-filter-segments">
+                    <Seg<Filter>
+                      name="filter"
+                      label="Filter notes"
+                      value={filter}
+                      onChange={setFilter}
+                      options={filterOptions.map((option) => ({
+                        value: option.value,
                         label: (
                           <>
-                            All <span className="seg-count">{allNotes.length}</span>
+                            {option.label} <span className="seg-count">{option.count}</span>
                           </>
                         ),
-                      },
-                      {
-                        value: 'unseen',
-                        label: (
-                          <>
-                            Unseen <span className="seg-count">{unseen}</span>
-                          </>
-                        ),
-                      },
-                      {
-                        value: 'high',
-                        label: (
-                          <>
-                            High <span className="seg-count">{stats.high}</span>
-                          </>
-                        ),
-                      },
-                      {
-                        value: 'medium',
-                        label: (
-                          <>
-                            Medium <span className="seg-count">{stats.medium}</span>
-                          </>
-                        ),
-                      },
-                      {
-                        value: 'mine',
-                        label: (
-                          <>
-                            Mine <span className="seg-count">{stats.mine}</span>
-                          </>
-                        ),
-                      },
-                    ]}
-                  />
+                      }))}
+                    />
+                  </div>
+                  <label className="toolbar-filter-select">
+                    <span className="visually-hidden">Filter notes</span>
+                    <select
+                      value={filter}
+                      onChange={(event) => setFilter(event.target.value as Filter)}
+                    >
+                      {filterOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label} · {option.count}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon name="chevronDown" />
+                  </label>
                 </>
               )}
             </div>
             {content === 'diff' && (
               <div className="toolbar-right">
-                <button
-                  className="btn btn-secondary nav-note"
-                  onClick={() => {
-                    const previous = stepNote(nav, current, -1);
-                    if (previous) jumpNote(previous);
-                  }}
-                  disabled={!nav.length}
-                >
-                  <Icon name="arrowUp" />
-                  Previous
-                </button>
-                <Seg<ViewMode>
-                  name="view"
-                  label="Diff layout"
-                  value={mode}
-                  onChange={setMode}
-                  options={[
-                    { value: 'unified', label: 'Unified' },
-                    { value: 'split', label: 'Split' },
-                  ]}
+                <DisplayOptions
+                  mode={mode}
+                  density={density}
+                  onMode={setMode}
+                  onDensity={setDensity}
                 />
-                <Seg<Density>
-                  name="density"
-                  label="Review density"
-                  value={density}
-                  onChange={setDensity}
-                  options={[
-                    { value: 'comfortable', label: 'Comfortable' },
-                    { value: 'compact', label: 'Compact' },
-                  ]}
-                />
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    const next = stepNote(nav, current, 1);
-                    if (next) jumpNote(next);
-                  }}
-                  disabled={!nav.length}
-                >
-                  <Icon name="arrowDown" />
-                  Next note
-                </button>
+                <div className="toolbar-nav" role="group" aria-label="Note navigation">
+                  <button
+                    type="button"
+                    className="btn btn-secondary nav-note"
+                    aria-label="Previous note"
+                    title="Previous note (K)"
+                    onClick={() => {
+                      const previous = stepNote(nav, current, -1);
+                      if (previous) jumpNote(previous);
+                    }}
+                    disabled={!nav.length}
+                  >
+                    <Icon name="arrowUp" />
+                    <span className="nav-note-label">Previous</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary nav-note"
+                    aria-label="Next note"
+                    title="Next note (J)"
+                    onClick={() => {
+                      const next = stepNote(nav, current, 1);
+                      if (next) jumpNote(next);
+                    }}
+                    disabled={!nav.length}
+                  >
+                    <Icon name="arrowDown" />
+                    <span className="nav-note-label">Next</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
