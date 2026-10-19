@@ -12,9 +12,23 @@ describe('pruneDirectories', () => {
     const active = join(root, 'active');
     const recent = join(root, 'recent');
     const newest = join(root, 'newest');
-    await Promise.all([mkdir(old), mkdir(active), mkdir(recent), mkdir(newest), writeFile(join(root, 'file'), '')]);
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    await Promise.all([utimes(old, yesterday, yesterday), utimes(active, yesterday, yesterday)]);
+    await Promise.all([
+      mkdir(old),
+      mkdir(active),
+      mkdir(recent),
+      mkdir(newest),
+      writeFile(join(root, 'file'), ''),
+    ]);
+    const now = Date.now();
+    const yesterday = new Date(now - 24 * 60 * 60 * 1000);
+    const recentTime = new Date(now - 2_000);
+    const newestTime = new Date(now - 1_000);
+    await Promise.all([
+      utimes(old, yesterday, yesterday),
+      utimes(active, yesterday, yesterday),
+      utimes(recent, recentTime, recentTime),
+      utimes(newest, newestTime, newestTime),
+    ]);
 
     await pruneDirectories(root, {
       maxAgeMs: 60 * 60 * 1000,
