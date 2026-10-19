@@ -14,7 +14,7 @@ import type { PromoteService } from '../promote/promote';
 import type { ClaudeClient } from '../review/claude';
 import type { ReviewService } from '../review/service';
 import type { SettingsService } from '../settings/settings';
-import { isAllowedExternalUrl } from '../shell/external';
+import { isAllowedExternalUrl } from '../../shared/external';
 
 export interface Services {
   toolchain: ToolchainService;

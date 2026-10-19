@@ -21,7 +21,7 @@ import { createAnalysisCache } from './review/cache';
 import { createClaudeClient } from './review/claude';
 import { createReviewService } from './review/service';
 import { createSettings } from './settings/settings';
-import { isAllowedExternalUrl } from './shell/external';
+import { isAllowedExternalUrl } from '../shared/external';
 import { createJsonStore } from './store/json-store';
 
 const devUrl = !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined;
