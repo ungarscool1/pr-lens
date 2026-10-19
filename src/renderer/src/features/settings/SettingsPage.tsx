@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BinHealth, Health } from '../../../../shared/health';
+import { LSP_LANGUAGES, LspLanguage } from '../../../../shared/lsp';
 import type { SettingsPatch, SettingsView } from '../../../../shared/settings';
 import { Blueprint } from '../../ds';
 import { api, errorMessage, run } from '../../lib/api';
@@ -47,6 +48,7 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
   const [autoRun, setAutoRun] = useState(String(settings.autoRunMaxTokens));
   const [maxNotes, setMaxNotes] = useState(String(settings.maxNotes));
   const [terminalApp, setTerminalApp] = useState(settings.terminalApp);
+  const [lspPaths, setLspPaths] = useState<Partial<Record<LspLanguage, string>>>(settings.lspPaths);
   const [token, setToken] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -79,6 +81,19 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
       setMessage(
         on ? 'Promote to comment is on.' : 'Promote to comment is off. PR Lens is read-only again.',
       );
+    } catch (e) {
+      setMessage(errorMessage(e));
+    }
+  };
+  const saveServers = async (): Promise<void> => {
+    const paths: Partial<Record<LspLanguage, string>> = {};
+    for (const language of LspLanguage.options) {
+      const path = lspPaths[language]?.trim();
+      if (path) paths[language] = path;
+    }
+    try {
+      onSettings(await run(api.settings.update({ lspPaths: paths })));
+      setMessage('Language servers saved. They apply to the next impact map you open.');
     } catch (e) {
       setMessage(errorMessage(e));
     }
@@ -221,6 +236,44 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
           </div>
         </section>
       </details>
+
+      <Blueprint as="section" className="settings-card" aria-labelledby="servers-h">
+        <h2 id="servers-h">Impact map language servers</h2>
+        <p className="settings-help">
+          TypeScript and JavaScript are mapped built in. For other languages, point PR Lens at a
+          language server you installed; leave a path empty to skip that language. PR Lens never
+          installs, downloads or searches for one. It runs exactly the binary named here, on a
+          checkout of the PR head with every file made non-executable, and with settings that keep
+          the server from fetching code (for Go: <code>GOTOOLCHAIN=local</code>,{' '}
+          <code>GOPROXY=off</code>, <code>CGO_ENABLED=0</code>).
+        </p>
+        <section className="settings-grid" aria-label="Language servers">
+          {LspLanguage.options.map((language) => {
+            const info = LSP_LANGUAGES[language];
+            return (
+              <div className="field" key={language}>
+                <label htmlFor={`lsp-${language}`}>
+                  {info.label}: path to {info.server}
+                </label>
+                <input
+                  id={`lsp-${language}`}
+                  className="input mono"
+                  value={lspPaths[language] ?? ''}
+                  onChange={(e) =>
+                    setLspPaths((paths) => ({ ...paths, [language]: e.target.value }))
+                  }
+                  placeholder={info.example}
+                />
+              </div>
+            );
+          })}
+          <div className="settings-actions">
+            <button className="btn btn-secondary" onClick={() => void saveServers()}>
+              Save language servers
+            </button>
+          </div>
+        </section>
+      </Blueprint>
 
       <Blueprint as="section" className="settings-card" aria-labelledby="promote-h">
         <h2 id="promote-h">Promote to comment</h2>

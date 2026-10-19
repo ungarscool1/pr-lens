@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LspLanguage } from './lsp';
 
 export const DEFAULT_NOISE_GLOBS = [
   '**/pnpm-lock.yaml',
@@ -46,6 +47,8 @@ const fields = {
   terminalApp: z
     .string()
     .regex(/^(?!-)[A-Za-z0-9 ._-]{1,60}$/, 'An app name like Terminal or iTerm'),
+  /** Language servers for the impact map, by language. Only these exact binaries are run. */
+  lspPaths: z.partialRecord(LspLanguage, AbsPath),
 };
 
 export const Settings = z.object({
@@ -58,6 +61,7 @@ export const Settings = z.object({
   reviewTimeoutSec: fields.reviewTimeoutSec.default(600),
   terminalApp: fields.terminalApp.default('Terminal'),
   promoteEnabled: fields.promoteEnabled.default(false),
+  lspPaths: fields.lspPaths.default({}),
 });
 export type Settings = z.infer<typeof Settings>;
 

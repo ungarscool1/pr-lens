@@ -216,7 +216,7 @@ describe('review service: compare', () => {
     const git = {
       directDiff: vi.fn(async () => SAMPLE_DIFF),
       worktree: () => Promise.reject(new Error('unused')),
-      treePaths: () => Promise.reject(new Error('unused')),
+      treeEntries: () => Promise.reject(new Error('unused')),
       sourceFiles: () => Promise.reject(new Error('unused')),
     };
     const release = vi.fn(async () => ({

@@ -2258,36 +2258,118 @@
     color: var(--n7);
     font-size: 13px;
   }
-  .impact-help {
-    max-width: 340px;
-    text-align: right;
-  }
-  .impact-functions {
+  .impact-legend {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    max-width: 1100px;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font: 11px var(--font-mono);
+    color: var(--n7);
   }
-  .impact-function {
+  .impact-swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .impact-swatch::before {
+    content: '';
+    width: 14px;
+    height: 10px;
+    border: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+    border-radius: 3px;
+    background: var(--bg);
+  }
+  .impact-swatch.changed::before {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 22%, var(--n1));
+  }
+  .impact-swatch.outside::before {
+    border-style: dashed;
+    background: transparent;
+  }
+  .impact-languages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .impact-language {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 1.25fr) minmax(0, 1fr);
-    gap: 12px;
-    align-items: stretch;
-    padding: 14px;
+    grid-template-columns: auto auto;
+    gap: 2px 8px;
+    padding: 7px 11px;
+    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    border-radius: 8px;
+    background: var(--n1);
+    font-size: 12.5px;
+  }
+  .impact-language span {
+    font: 11px var(--font-mono);
+    color: var(--n7);
+    align-self: center;
+  }
+  .impact-language small {
+    grid-column: 1/-1;
+    max-width: 420px;
+    color: var(--n7);
+  }
+  .impact-language.mapped span {
+    color: var(--a7);
+  }
+  .impact-language.failed {
+    border-color: var(--del-mark);
+  }
+  .impact-language.failed span {
+    color: var(--del-mark);
+  }
+  .impact-language.off {
+    border-style: dashed;
+  }
+  .impact-graph {
+    flex: none;
+    max-height: min(70vh, 760px);
+    overflow: auto;
+    overscroll-behavior: contain;
     border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
     border-radius: 12px;
-    background: var(--n1);
+    background:
+      radial-gradient(circle, color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1px)
+        0 0 / 18px 18px,
+      var(--n1);
   }
-  .impact-column,
-  .impact-focus {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    min-width: 0;
+  .impact-canvas {
+    position: relative;
+    min-width: 100%;
   }
-  .impact-focus {
-    padding-inline: 12px;
-    border-inline: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  .impact-edges {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+  }
+  .impact-edge {
+    fill: none;
+    stroke: color-mix(in srgb, var(--text) 32%, transparent);
+    stroke-width: 1.4;
+    transition:
+      opacity 0.12s,
+      stroke 0.12s;
+  }
+  .impact-edge.back {
+    stroke-dasharray: 4 3;
+  }
+  .impact-edge.on {
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+  .impact-edge.dim {
+    opacity: 0.18;
+  }
+  .impact-arrow {
+    fill: color-mix(in srgb, var(--text) 40%, transparent);
+  }
+  .impact-arrow-on {
+    fill: var(--accent);
   }
   .impact-label {
     font: 500 10.5px var(--font-mono);
@@ -2295,27 +2377,49 @@
     text-transform: uppercase;
     color: var(--n6);
   }
+  .impact-column-label {
+    position: absolute;
+    top: 18px;
+  }
   .impact-node {
-    width: 100%;
+    position: absolute;
     min-width: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 3px 8px;
+    align-content: center;
+    align-items: center;
+    gap: 2px 8px;
     text-align: left;
-    padding: 8px 9px;
-    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    padding: 6px 10px;
+    border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
     border-radius: 8px;
     background: var(--bg);
     cursor: pointer;
     color: var(--text);
+    transition: opacity 0.12s;
   }
-  .impact-node:hover {
+  .impact-node:hover,
+  .impact-node:focus-visible {
     border-color: var(--accent);
     background: var(--a1);
   }
+  .impact-node:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   .impact-node.changed {
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 10%, var(--n1));
+    background: color-mix(in srgb, var(--accent) 14%, var(--n1));
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  .impact-node.outside {
+    border-style: dashed;
+  }
+  .impact-node.outside svg {
+    color: var(--n6);
+  }
+  .impact-node.dim {
+    opacity: 0.35;
   }
   .impact-node-name {
     overflow: hidden;
@@ -2384,6 +2488,7 @@
   }
   .impact-list button:disabled {
     cursor: default;
+    opacity: 0.7;
   }
   .impact-list svg {
     color: var(--accent);
@@ -2409,6 +2514,16 @@
     border: 1px dashed var(--n4);
     border-radius: 10px;
     color: var(--n7);
+  }
+  .code.line-flash {
+    animation: line-flash 1.8s ease-out;
+  }
+  @keyframes line-flash {
+    0%,
+    35% {
+      box-shadow: inset 0 0 0 2px var(--accent);
+      background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+    }
   }
   .impact-disclaimer {
     max-width: 900px;
@@ -2666,17 +2781,6 @@
     .impact-head {
       align-items: flex-start;
       flex-direction: column;
-    }
-    .impact-help {
-      text-align: left;
-    }
-    .impact-function {
-      grid-template-columns: 1fr;
-    }
-    .impact-focus {
-      padding: 12px 0;
-      border-inline: 0;
-      border-block: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
     }
     .stats {
       max-width: none;

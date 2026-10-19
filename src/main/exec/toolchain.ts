@@ -75,6 +75,14 @@ export function gitEnv(tc: Toolchain): NodeJS.ProcessEnv {
   return { ...ghEnv(tc), GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' };
 }
 
+/** A language server: the base env plus its preset's fixed values, nothing else from ours. */
+export function serverEnv(
+  tc: Toolchain,
+  extra: Readonly<Record<string, string>>,
+): NodeJS.ProcessEnv {
+  return { ...baseEnv(tc.path), ...extra };
+}
+
 /**
  * Allow-list only: API keys, alternate providers and GitHub tokens never reach claude.
  * The OAuth token (from `claude setup-token`) is optional; without it the existing login is used.

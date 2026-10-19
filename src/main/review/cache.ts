@@ -10,6 +10,7 @@ import {
   PROMPT_VERSION,
   ReleaseSummary,
 } from '../../shared/review';
+import { ImpactMap } from '../../shared/impact';
 import type { Settings } from '../../shared/settings';
 import type { JsonStore } from '../store/json-store';
 
@@ -33,11 +34,15 @@ export interface AnalysisCache {
   put(subject: Subject, analysis: Analysis, settings: CacheSettings): Promise<void>;
   getRelease(subject: Subject, headSha: string): Promise<ReleaseSummary | null>;
   putRelease(subject: Subject, headSha: string, release: ReleaseSummary): Promise<void>;
+  /** The impact map for this head, if one was stored under the same `key` (analyzer + diff). */
+  getImpact(subject: Subject, headSha: string, key: string): Promise<ImpactMap | null>;
+  putImpact(subject: Subject, headSha: string, key: string, map: ImpactMap): Promise<void>;
   /** Removes old cache heads, retaining a bounded number of the most recently written entries. */
   prune(): Promise<void>;
 }
 
 const ReleaseFile = z.object({ version: z.literal(CACHE_VERSION), release: ReleaseSummary });
+const ImpactFile = z.object({ version: z.literal(CACHE_VERSION), key: z.string(), map: ImpactMap });
 
 export type CacheSettings = Pick<Settings, 'model' | 'maxNotes' | 'noiseGlobs'>;
 
@@ -62,6 +67,8 @@ const fileFor = (s: Subject, headSha: string): string => {
 };
 const releaseFileFor = (s: Subject, headSha: string): string =>
   fileFor(s, headSha).replace(/\.json$/, '.release.json');
+const impactFileFor = (s: Subject, headSha: string): string =>
+  fileFor(s, headSha).replace(/\.json$/, '.impact.json');
 
 /**
  * One analysis per (subject, head SHA): a PR at one push, or one compare range. A hit made with different settings is still
@@ -88,7 +95,7 @@ export function createAnalysisCache(store: JsonStore, analysesDir?: string): Ana
             files
               .filter((file) => file.isFile())
               .map(async (file) => {
-                const match = /^(?<sha>[a-f0-9]{7,64})(?:\.release)?\.json$/.exec(file.name);
+                const match = /^(?<sha>[a-f0-9]{7,64})(?:\.release|\.impact)?\.json$/.exec(file.name);
                 if (!match?.groups?.sha) return;
                 const path = join(dir, file.name);
                 try {
@@ -158,6 +165,22 @@ export function createAnalysisCache(store: JsonStore, analysesDir?: string): Ana
     },
     async putRelease(subject, headSha, release) {
       await store.write(releaseFileFor(subject, headSha), { version: CACHE_VERSION, release });
+      await pruneQuietly();
+    },
+    async getImpact(subject, headSha, key) {
+      try {
+        const file = await store.read(impactFileFor(subject, headSha), ImpactFile.nullable(), null);
+        return file?.key === key ? file.map : null;
+      } catch (err) {
+        console.warn(
+          `[cache] ignoring unreadable impact map for ${subjectSlug(subject)}:`,
+          err instanceof Error ? err.name : 'unknown error',
+        );
+        return null;
+      }
+    },
+    async putImpact(subject, headSha, key, map) {
+      await store.write(impactFileFor(subject, headSha), { version: CACHE_VERSION, key, map });
       await pruneQuietly();
     },
     prune: pruneQuietly,

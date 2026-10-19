@@ -16,6 +16,9 @@ and what is not built.
 - [Claude Code](https://code.claude.com) (`claude`)
 - `git`, for **Ask Claude** worktrees and direct (two-dot) compares of diverged refs. macOS ships it with the Command
   Line Tools (`xcode-select --install`); `brew install git` works too. No Xcode needed.
+- Optional, for the **Impact** map of Go or Python changes: your own `gopls` or
+  `pyright-langserver` / `basedpyright-langserver`, with its path set in Settings. TypeScript and
+  JavaScript need nothing extra.
 
 ## Setup
 

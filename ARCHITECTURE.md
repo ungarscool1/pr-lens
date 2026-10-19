@@ -39,10 +39,11 @@ renderer can match events that arrive before `review:start` has replied.
   override either binary.
 - `src/main/exec/toolchain.ts` builds the child environments from allow-lists. `claude` gets
   `PATH`, `HOME`, locale vars and, if set, `CLAUDE_CODE_OAUTH_TOKEN`; nothing else.
-- `src/main/git/git.ts` is only used for direct (two-dot) compares of diverged refs: GitHub's
-  compare API has no two-dot diff. It keeps a bare cache repo per GitHub repo, fetches just the
-  two SHAs (`--depth=1 --filter=blob:none`), and `git diff`s them; git fetches the blobs it
-  needs on demand. Credentials come from `gh auth git-credential`, never a prompt
+- `src/main/git/git.ts` is used for direct (two-dot) compares of diverged refs (GitHub's
+  compare API has no two-dot diff), deep-dive worktrees and the impact map's snapshot reads.
+  It keeps a bare cache repo per GitHub repo, fetches just the needed SHAs
+  (`--depth=1 --filter=blob:none`), and `git diff`s them; git fetches the blobs it needs on
+  demand. Credentials come from `gh auth git-credential`, never a prompt
   (`GIT_TERMINAL_PROMPT=0`).
 
 ## Deep dive (`src/main/deepdive`)
@@ -155,7 +156,7 @@ per file) under `app.getPath('userData')`, each read back through a zod schema.
   stale, so a paid-for review is never discarded silently. Unreadable or older-version files
   are a miss (logged by error name only, never content). A new push means a new head SHA and
   so a fresh review. Cache heads are pruned by write time after 30 days and bounded to the 200
-  most recent entries; an analysis and its release summary are removed together.
+  most recent entries; an analysis, its release summary and its impact map are removed together.
 - **Private notes and note state** live in `notes/<subject slug>.json`: per PR, so they
   survive new pushes, and per SHA range for a compare. AI note IDs are a hash of path, category and anchor text, so
   seen/dismissed state carries over when a re-run finds the same thing.
@@ -179,15 +180,62 @@ pure view logic (note ordering, filters, row building, intra-line highlights) an
 
 ### Function impact map
 
-The Review toolbar has an **Impact** mode. For the opened target, `src/main/impact` fetches a
-bounded set of TypeScript/TSX source files at the immutable head SHA through the existing
-authenticated, blobless Git cache—no worktree or GitHub write is needed. `analysis.ts` uses the
-TypeScript compiler API to find changed functions, same-file and relative-import direct calls,
-imports, and test files that import or call changed code. It returns only changed functions and
-their direct callers/callees, keeping the renderer map readable; every node, module and test links
-back to its diff file. Dynamic dispatch, path aliases and runtime wiring are reported as unresolved
-rather than guessed. The compiler API is bundled into the main process so packaged builds do not
-depend on development `node_modules`.
+The Review toolbar has an **Impact** mode: a call graph of the changed functions, their direct
+callers and their direct callees. It is built locally and deterministically, with no model.
+
+1. `src/main/impact/service.ts` lists the head commit's tree in the bare cache repo
+   (`git.treeEntries`) and picks up to 1,200 TypeScript/JavaScript files: changed files first,
+   then their directory neighbours, then tests. Root `tsconfig*.json`/`jsconfig.json` come along
+   for `paths` and `baseUrl`. `git.sourceFiles` asks `rev-list --missing=print` which blobs the
+   blobless fetch left on GitHub, fetches them in one request (`fetch --stdin`, as git's own lazy
+   fetch does, but batched), and reads everything with one `cat-file --batch`. No worktree.
+2. `analysis.ts` runs in a worker thread (`run-worker.ts`, 2 minute limit), so the main process
+   stays responsive and only the worker loads the compiler. It builds a TypeScript language
+   service over the in-memory snapshot (`noLib`, no `node_modules`) and, for each changed
+   declaration (the innermost function, method or class around an added or deleted line; at
+   most 60), asks it for the call hierarchy: `prepareCallHierarchy`, incoming and outgoing
+   calls. That is the analysis behind an editor's "Show call hierarchy", so imports through
+   `paths`, re-exports, interface methods implemented by object literals and JSX usage resolve;
+   calls through untyped values or into packages outside the repository are left out, not
+   guessed. Context lines never mark a function as changed.
+3. The map (`src/shared/impact.ts`, zod) is stored as `analyses/<subject>/<headSha>.impact.json`
+   with a key of the analyzer version and the changed lines, so it is reused across restarts
+   and pruned with its analysis; a new push or a changed base is a new key.
+4. `impactLayout.ts` (renderer, pure) lays the graph out in columns: callers, changed
+   functions (chained left to right by longest path, cycles drawn as dashed back edges),
+   callees; rows follow file order, then barycenter passes. `ImpactView` draws it as SVG edges
+   under HTML buttons. Clicking a changed function switches to Diff mode and centres its first
+   changed line; a function elsewhere in the diff goes to its lines or file; one outside the
+   diff opens on GitHub at the head SHA.
+
+#### Other languages: the user's own language servers (`src/main/impact/lsp`)
+
+Call hierarchy is a standard LSP request, so Go and Python changes are mapped by a language
+server the user installed. PR Lens ships none and never searches PATH for one: a language is
+mapped only after its server's absolute path is set in Settings (`lspPaths`). Each language has
+a fixed launch recipe (`presets.ts`, args and env); an arbitrary command line is not offered.
+
+1. `service.ts` checks out the head once (`git.worktree`, named `impact__<owner>__<repo>__<sha12>`,
+   sharing the deep-dive LRU) and clears every execute bit in it (`checkout.ts`, links skipped).
+   A server or the tool it calls cannot then run a binary the PR ships, such as a committed
+   `.venv/bin/python`.
+2. `runner.ts` checks the path is executable and spawns it through `exec.ts`'s `spawnStdio`
+   (no shell, base env allow-list plus the preset's values). For Go those are
+   `GOTOOLCHAIN=local` (a `toolchain` line cannot download another Go), `GOPROXY=off` (only
+   the user's module cache and `vendor/`) and `CGO_ENABLED=0`.
+3. `analyze.ts` speaks JSON-RPC (`rpc.ts`): `initialize`, `didOpen` for changed files, waits
+   for `$/progress` to go quiet, then `documentSymbol` to find the innermost function or method
+   around each changed line and `prepareCallHierarchy` with incoming and outgoing calls. Items
+   outside the checkout (standard library, dependencies) are dropped. It stops the server after
+   3 minutes.
+4. Results merge with the TypeScript map. `ImpactMap.languages` says per language whether it was
+   mapped, failed (with the reason), or is off because no server is set. A map with a failed
+   server is not stored, so a fixed path or a less busy server gets another try; the stored
+   key includes the configured paths.
+
+Rust is deliberately not offered: rust-analyzer's `cargo metadata` honours the repository's
+`.cargo/config.toml` (`rustc-wrapper`), and build scripts and proc macros are PR code. Adding a
+language means a preset whose server can load an untrusted checkout without running it.
 
 For PRs, a separate read-only `github:prContext` call loads submitted review decisions, requested
 reviewers, unresolved review threads, the head commit's check rollup, and base-branch CODEOWNERS

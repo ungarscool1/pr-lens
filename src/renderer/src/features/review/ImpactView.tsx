@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import type { ImpactMap, ImpactNode } from '../../../../shared/impact';
 import { Icon } from '../../ds';
 import { api, errorMessage, run } from '../../lib/api';
+import { layoutImpact, NODE_H, NODE_W } from './impactLayout';
 
 interface Props {
   targetKey: string;
+  /** Files in this diff; a node elsewhere opens on GitHub instead. */
+  diffPaths: ReadonlySet<string>;
   onJumpPath: (path: string) => void;
+  onOpenNode: (node: ImpactNode) => void;
 }
 
 type State =
@@ -13,22 +17,114 @@ type State =
   | { kind: 'error'; targetKey: string; message: string }
   | { kind: 'ready'; targetKey: string; map: ImpactMap };
 
-const location = (node: ImpactNode): string => `${node.path}:${node.startLine}`;
+const actionOf = (node: ImpactNode, diffPaths: ReadonlySet<string>): string =>
+  node.changed
+    ? 'Show the change in the diff'
+    : diffPaths.has(node.path)
+      ? 'Show in the diff'
+      : 'Open on GitHub at this commit';
 
-function FunctionCard({ node, onJump }: { node: ImpactNode; onJump: (path: string) => void }) {
+function ImpactGraph({
+  map,
+  diffPaths,
+  onOpen,
+}: {
+  map: ImpactMap;
+  diffPaths: ReadonlySet<string>;
+  onOpen: (node: ImpactNode) => void;
+}) {
+  const layout = useMemo(() => layoutImpact(map), [map]);
+  const [active, setActive] = useState<string | null>(null);
+  const linked = useMemo(() => {
+    if (!active) return null;
+    const ids = new Set([active]);
+    for (const edge of map.edges) {
+      if (edge.from === active) ids.add(edge.to);
+      if (edge.to === active) ids.add(edge.from);
+    }
+    return ids;
+  }, [active, map.edges]);
+  const marker = useId().replace(/:/g, '');
+
   return (
-    <button
-      className={`impact-node ${node.changed ? 'changed' : ''}`}
-      onClick={() => onJump(node.path)}
-    >
-      <span className="impact-node-name">{node.name}</span>
-      <span className="impact-node-path">{location(node)}</span>
-      {node.test && <span className="impact-node-kind">test</span>}
-    </button>
+    <div className="impact-graph">
+      <div className="impact-canvas" style={{ width: layout.width, height: layout.height }}>
+        <svg
+          className="impact-edges"
+          width={layout.width}
+          height={layout.height}
+          aria-hidden="true"
+        >
+          <defs>
+            {['', '-on'].map((suffix) => (
+              <marker
+                key={suffix}
+                id={`${marker}${suffix}`}
+                className={`impact-arrow${suffix}`}
+                viewBox="0 0 8 8"
+                refX="6"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8 z" />
+              </marker>
+            ))}
+          </defs>
+          {layout.edges.map((edge) => {
+            const on = active !== null && (edge.from === active || edge.to === active);
+            return (
+              <path
+                key={`${edge.from}>${edge.to}`}
+                d={edge.d}
+                className={`impact-edge${edge.back ? ' back' : ''}${on ? ' on' : active ? ' dim' : ''}`}
+                markerEnd={`url(#${marker}${on ? '-on' : ''})`}
+              />
+            );
+          })}
+        </svg>
+        {layout.columns.map((column, index) => (
+          <span key={index} className="impact-label impact-column-label" style={{ left: column.x }}>
+            {column.label}
+          </span>
+        ))}
+        {layout.nodes.map(({ node, x, y }) => {
+          const action = actionOf(node, diffPaths);
+          const outside = !diffPaths.has(node.path);
+          return (
+            <button
+              key={node.id}
+              className={`impact-node${node.changed ? ' changed' : ''}${outside ? ' outside' : ''}${linked && !linked.has(node.id) ? ' dim' : ''}`}
+              style={{ left: x, top: y, width: NODE_W, height: NODE_H }}
+              title={`${node.container ? `${node.container}.` : ''}${node.name}\n${node.path}:${node.startLine}\n${action}`}
+              aria-label={`${node.name}${node.changed ? ', changed' : ''}, ${node.path} line ${node.startLine}. ${action}`}
+              onClick={() => onOpen(node)}
+              onMouseEnter={() => setActive(node.id)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(node.id)}
+              onBlur={() => setActive(null)}
+            >
+              <span className="impact-node-name">{node.name}</span>
+              {node.test ? (
+                <span className="impact-node-kind">test</span>
+              ) : node.kind === 'module' ? (
+                <span className="impact-node-kind">top level</span>
+              ) : outside ? (
+                <Icon name="arrowUpRight" size={12} />
+              ) : null}
+              <span className="impact-node-path">
+                {node.path}:{node.startLine}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-export function ImpactView({ targetKey, onJumpPath }: Props) {
+export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   useEffect(() => {
@@ -44,16 +140,12 @@ export function ImpactView({ targetKey, onJumpPath }: Props) {
     };
   }, [targetKey]);
 
-  const nodeById = useMemo(
-    () =>
-      state.kind === 'ready' ? new Map(state.map.nodes.map((node) => [node.id, node])) : new Map(),
-    [state],
-  );
-
   if (state.kind === 'loading' || state.targetKey !== targetKey)
     return (
       <section className="impact-page">
-        <p className="impact-loading">Building the local TypeScript impact map…</p>
+        <p className="impact-loading">
+          Building the call graph with the TypeScript language service…
+        </p>
       </section>
     );
   if (state.kind === 'error') {
@@ -65,73 +157,65 @@ export function ImpactView({ targetKey, onJumpPath }: Props) {
     );
   }
 
-  const changed = state.map.nodes.filter((node) => node.changed);
+  const { map } = state;
+  const changed = map.nodes.filter((node) => node.changed).length;
   return (
     <section className="impact-page" aria-label="Function impact map">
       <header className="impact-head">
         <div>
-          <span className="card-kicker">Static TypeScript map</span>
+          <span className="card-kicker">Call hierarchy</span>
           <h2>Function impact</h2>
           <p>
-            {state.map.scannedFiles} source files scanned
-            {state.map.skippedFiles ? ` · ${state.map.skippedFiles} not mapped` : ''}
+            {changed} changed · {map.nodes.length - changed} connected · {map.scannedFiles} source
+            files scanned
+            {map.skippedFiles ? ` · ${map.skippedFiles} not mapped` : ''}
           </p>
         </div>
-        <p className="impact-help">Select a function, module, or test to jump back to its diff.</p>
-      </header>
-      {!changed.length ? (
-        <p className="impact-empty">No changed TypeScript functions were found in this diff.</p>
-      ) : (
-        <div className="impact-functions">
-          {changed.map((node) => {
-            const callers = state.map.edges
-              .filter((edge) => edge.to === node.id)
-              .map((edge) => nodeById.get(edge.from))
-              .filter((candidate): candidate is ImpactNode => !!candidate);
-            const callees = state.map.edges
-              .filter((edge) => edge.from === node.id)
-              .map((edge) => nodeById.get(edge.to))
-              .filter((candidate): candidate is ImpactNode => !!candidate);
-            return (
-              <article className="impact-function" key={node.id}>
-                <div className="impact-column callers">
-                  <span className="impact-label">Called by</span>
-                  {callers.length ? (
-                    callers.map((caller) => (
-                      <FunctionCard key={caller.id} node={caller} onJump={onJumpPath} />
-                    ))
-                  ) : (
-                    <span className="impact-none">No direct caller found</span>
-                  )}
-                </div>
-                <div className="impact-focus">
-                  <span className="impact-label">Changed</span>
-                  <FunctionCard node={node} onJump={onJumpPath} />
-                </div>
-                <div className="impact-column callees">
-                  <span className="impact-label">Calls</span>
-                  {callees.length ? (
-                    callees.map((callee) => (
-                      <FunctionCard key={callee.id} node={callee} onJump={onJumpPath} />
-                    ))
-                  ) : (
-                    <span className="impact-none">No direct call found</span>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+        <div className="impact-legend" aria-label="Legend">
+          <span className="impact-swatch changed">Changed</span>
+          <span className="impact-swatch">In this diff</span>
+          <span className="impact-swatch outside">Elsewhere · opens on GitHub</span>
         </div>
+      </header>
+      {map.languages.length > 0 && (
+        <ul className="impact-languages" aria-label="Languages">
+          {map.languages.map((language) => (
+            <li key={language.language} className={`impact-language ${language.status}`}>
+              <b>{language.label}</b>
+              <span>
+                {language.status === 'mapped'
+                  ? `mapped · ${language.detail ?? ''}`
+                  : language.status === 'off'
+                    ? 'not mapped'
+                    : 'failed'}
+              </span>
+              {language.status !== 'mapped' && language.detail && <small>{language.detail}</small>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {map.omittedChanged > 0 && (
+        <p className="impact-none">
+          {map.omittedChanged} more changed function{map.omittedChanged === 1 ? ' is' : 's are'} not
+          drawn, to keep the graph readable.
+        </p>
+      )}
+      {!changed ? (
+        <p className="impact-empty">
+          No changed functions were found in the languages mapped for this diff.
+        </p>
+      ) : (
+        <ImpactGraph map={map} diffPaths={diffPaths} onOpen={onOpenNode} />
       )}
       <div className="impact-details">
         <section className="impact-section">
           <h3>Imported modules</h3>
-          {state.map.imports.length ? (
+          {map.imports.length ? (
             <ul className="impact-list">
-              {state.map.imports.map((imp) => (
+              {map.imports.map((imp) => (
                 <li key={`${imp.path}:${imp.module}`}>
                   <button
-                    disabled={!imp.resolvedPath}
+                    disabled={!imp.resolvedPath || !diffPaths.has(imp.resolvedPath)}
                     onClick={() => imp.resolvedPath && onJumpPath(imp.resolvedPath)}
                   >
                     <Icon name="arrowUpRight" size={13} />
@@ -147,11 +231,14 @@ export function ImpactView({ targetKey, onJumpPath }: Props) {
         </section>
         <section className="impact-section">
           <h3>Associated tests</h3>
-          {state.map.tests.length ? (
+          {map.tests.length ? (
             <ul className="impact-list">
-              {state.map.tests.map((test) => (
+              {map.tests.map((test) => (
                 <li key={test.path}>
-                  <button onClick={() => onJumpPath(test.path)}>
+                  <button
+                    disabled={!diffPaths.has(test.path)}
+                    onClick={() => onJumpPath(test.path)}
+                  >
                     <Icon name="arrowUpRight" size={13} />
                     <span>{test.path}</span>
                     <small>
@@ -164,13 +251,15 @@ export function ImpactView({ targetKey, onJumpPath }: Props) {
               ))}
             </ul>
           ) : (
-            <p className="impact-none">No associated TypeScript test found.</p>
+            <p className="impact-none">No associated test found.</p>
           )}
         </section>
       </div>
       <p className="impact-disclaimer">
-        Local and relative-import calls are resolved syntactically. Dynamic dispatch, path aliases,
-        and runtime wiring are intentionally not guessed.
+        Built locally from the head commit with each language's call hierarchy, the same one an
+        editor shows: TypeScript's built in, others from the language servers set in Settings. Calls
+        the language service cannot resolve, or into code outside this repository, are not drawn
+        rather than guessed.
       </p>
     </section>
   );

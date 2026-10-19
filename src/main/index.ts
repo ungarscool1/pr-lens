@@ -5,10 +5,12 @@ import { app, BrowserWindow, nativeTheme, safeStorage, session, shell } from 'el
 import type { IpcMainInvokeEvent } from 'electron';
 import { REVIEW_EVENT_CHANNEL } from '../shared/ipc';
 import type { ReviewEvent } from '../shared/review';
-import { execFileRunner } from './exec/exec';
+import { execFileRunner, spawnStdio } from './exec/exec';
 import { createToolchain } from './exec/toolchain';
 import { createDeepDive } from './deepdive/deepdive';
 import { createGit } from './git/git';
+import { analyzeInWorker } from './impact/run-worker';
+import { createServerRunner } from './impact/lsp/runner';
 import { createImpactService } from './impact/service';
 import { createPromote } from './promote/promote';
 import { createWriteClient } from './promote/write-client';
@@ -75,7 +77,16 @@ async function createServices(): Promise<void> {
     settings,
     sessionsDir: join(data, 'sessions'),
   });
-  const impact = createImpactService(git, review);
+  const impact = createImpactService({
+    git,
+    review,
+    cache,
+    analyze: analyzeInWorker,
+    servers: {
+      paths: () => settings.current().lspPaths,
+      run: createServerRunner(toolchain, spawnStdio),
+    },
+  });
   // The write client exists only for promote; nothing else can reach a GitHub mutation.
   const promote = createPromote({
     write: createWriteClient(execFileRunner, toolchain),
