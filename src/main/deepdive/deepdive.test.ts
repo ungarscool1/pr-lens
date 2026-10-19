@@ -211,6 +211,7 @@ describe('deep dive service', () => {
         worktree,
         treeEntries: () => Promise.reject(new Error('unused')),
         sourceFiles: () => Promise.reject(new Error('unused')),
+        filesAt: () => Promise.reject(new Error('unused')),
       },
       review: { loaded: (k) => (k === loaded.target.key ? loaded : undefined) },
       cache: {

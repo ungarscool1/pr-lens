@@ -8,6 +8,7 @@ import type { z } from 'zod';
 import type { ToolchainService } from '../exec/toolchain';
 import type { GitHubClient } from '../github/gh';
 import type { DeepDiveService } from '../deepdive/deepdive';
+import type { ContextService } from '../diff/context';
 import type { ImpactService } from '../impact/service';
 import type { NotesService } from '../notes/notes';
 import type { PromoteService } from '../promote/promote';
@@ -26,6 +27,7 @@ export interface Services {
   deepDive: DeepDiveService;
   promote: PromoteService;
   impact: ImpactService;
+  context: ContextService;
 }
 
 type Handler<C extends Channel> = (
@@ -84,6 +86,9 @@ export function registerIpc(
   handle('review:start', ({ targetKey, force, kind }) => s.review.start(targetKey, force, kind));
   handle('review:cancel', ({ jobId }) => s.review.cancel(jobId));
   handle('impact:get', ({ targetKey }) => s.impact.get(targetKey));
+  handle('diff:fileLines', async ({ targetKey, fid }) => ({
+    lines: await s.context.fileLines(targetKey, fid),
+  }));
   handle('notes:list', ({ subject }) => s.notes.list(subject));
   handle('notes:create', ({ subject, ...note }) => s.notes.create(subject, note));
   handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));

@@ -218,6 +218,7 @@ describe('review service: compare', () => {
       worktree: () => Promise.reject(new Error('unused')),
       treeEntries: () => Promise.reject(new Error('unused')),
       sourceFiles: () => Promise.reject(new Error('unused')),
+      filesAt: () => Promise.reject(new Error('unused')),
     };
     const release = vi.fn(async () => ({
       output: {

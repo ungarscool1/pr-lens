@@ -14,6 +14,20 @@ import { isConfigPath, isImpactSource } from './changes';
  *   PR_LENS_LIVE=1 pnpm test impact.live
  */
 describe.skipIf(!process.env.PR_LENS_LIVE)('live impact map', () => {
+  it('reads named files for expanding the diff', async () => {
+    const toolchain = createToolchain(execFileRunner, () => ({ ghPath: null, claudePath: null }));
+    const dir = await mkdtemp(join(tmpdir(), 'pr-lens-live-expand-'));
+    const git = createGit(execFileRunner, toolchain, {
+      repos: join(dir, 'git'),
+      worktrees: join(dir, 'wt'),
+    });
+    const repo = { owner: 'ungarscool1', repo: 'pr-lens' };
+    const sha = '501e3959d3bf25ca9a0663c6de7eb7c7d84b85cb';
+    const read = await git.filesAt(repo, sha, ['src/main/git/git.ts', 'missing.ts', ':(glob)*']);
+    expect(read.map((file) => file.path)).toEqual(['src/main/git/git.ts']);
+    expect(read[0]?.text).toContain('export function credentialArgs');
+  });
+
   it('reads a blobless snapshot in bulk and maps callers of a changed function', async () => {
     const toolchain = createToolchain(execFileRunner, () => ({ ghPath: null, claudePath: null }));
     const dir = await mkdtemp(join(tmpdir(), 'pr-lens-live-impact-'));

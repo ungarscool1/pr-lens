@@ -42,3 +42,10 @@ export function noiseKind(glob: string): NoiseKind {
   if (/snap/i.test(glob)) return 'snapshot';
   return 'generated';
 }
+
+/**
+ * Whether the unchanged lines around a file's hunks can be shown. Added and deleted files are
+ * already whole in the diff; binary files have no lines.
+ */
+export const canExpand = (f: DiffFile): boolean =>
+  !f.binary && f.hunks.length > 0 && (f.status === 'modified' || f.status === 'renamed');

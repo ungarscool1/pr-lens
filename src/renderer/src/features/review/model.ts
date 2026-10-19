@@ -1,8 +1,11 @@
+import { canExpand } from '../../../../shared/diff';
 import type { DiffFile, DiffLine, Side } from '../../../../shared/diff';
 import type { NoteState, PrivateNote } from '../../../../shared/notes';
 import type { AiNote } from '../../../../shared/review';
 import { changedRanges, markRange, tokenize } from '../../lib/highlight';
 import type { Tok } from '../../lib/highlight';
+import { gapActions, gapSize, gapsOf, shownIn } from './expand';
+import type { ExpandDir, Reveals } from './expand';
 
 /** AI and private notes in one shape, so the diff and sidebar treat them alike. */
 export type ViewNote =
@@ -81,10 +84,13 @@ export interface Cell {
   side: Side;
   num: number;
   toks: Tok[];
+  /** An unchanged line revealed around the hunks: not in the diff, so no note can anchor on it. */
+  extra?: true;
 }
 
 export type Row =
-  | { kind: 'hunk'; key: string; header: string }
+  /** A hunk header (null after the last hunk) and the expand actions of the gap before it. */
+  | { kind: 'hunk'; key: string; header: string | null; gap: number; actions: ExpandDir[] }
   | { kind: 'line'; key: string; cell: Cell }
   | { kind: 'pair'; key: string; left: Cell | null; right: Cell | null }
   | { kind: 'note'; key: string; note: ViewNote }
@@ -137,15 +143,23 @@ function forEachChangeBlock(
   }
 }
 
+/** The file at head and what of it is revealed; lines are null until loaded. */
+export interface FileContext {
+  lines: readonly string[] | null;
+  reveals: Reveals;
+}
+
 /**
- * Flattens a file into render rows: hunk headers, lines (or side-by-side pairs), and notes
- * and the composer right after the line they end on.
+ * Flattens a file into render rows: hunk headers with their expand actions, revealed unchanged
+ * lines, diff lines (or side-by-side pairs), and notes and the composer right after the line
+ * they end on.
  */
 export function buildRows(
   file: DiffFile,
   notes: readonly ViewNote[],
   mode: ViewMode,
   composer: ComposerAt | null,
+  context: FileContext | null = null,
 ): Row[] {
   const rows: Row[] = [];
   const after = (side: Side, num: number): void => {
@@ -162,8 +176,59 @@ export function buildRows(
   for (const n of notes)
     if (isFileLevel(n)) rows.push({ kind: 'note', key: `note-${n.id}`, note: n });
 
+  const expandable = canExpand(file);
+  const lines = context?.lines ?? null;
+  const gaps = gapsOf(file, lines?.length ?? null);
+  const extra = (from: number, to: number, delta: number): void => {
+    if (!lines) return;
+    for (let n = from; n <= to; n++) {
+      const line: DiffLine = {
+        id: `${file.fid}-x${n}`,
+        kind: 'ctx',
+        old: n + delta,
+        new: n,
+        text: lines[n - 1] ?? '',
+      };
+      const toks = tokenize(line.text);
+      const right: Cell = { line, side: 'RIGHT', num: n, toks, extra: true };
+      if (mode === 'unified') rows.push({ kind: 'line', key: line.id, cell: right });
+      else
+        rows.push({
+          kind: 'pair',
+          key: line.id,
+          left: { ...right, side: 'LEFT', num: n + delta },
+          right,
+        });
+    }
+  };
+  const gapRows = (gi: number, header: string | null): void => {
+    const g = gaps[gi];
+    if (!g) return;
+    const last = gi === gaps.length - 1;
+    if (!expandable) {
+      if (header !== null) rows.push({ kind: 'hunk', key: `h${gi}`, header, gap: gi, actions: [] });
+      return;
+    }
+    const size = gapSize(g);
+    // Until the file is loaded nothing is revealed, so the whole gap counts as hidden.
+    const shown: ReturnType<typeof shownIn> = lines
+      ? shownIn(g, context?.reveals[gi])
+      : { down: [0, -1], up: [0, -1], hidden: size };
+    extra(shown.down[0], shown.down[1], g.delta);
+    // A hunk keeps its header unless the gap above it was revealed whole; the end has none to keep.
+    if (shown.hidden !== 0 || (size === 0 && header !== null))
+      rows.push({
+        kind: 'hunk',
+        key: `h${gi}`,
+        header,
+        gap: gi,
+        actions: gapActions(g, last, shown.hidden),
+      });
+    extra(shown.up[0], shown.up[1], g.delta);
+  };
+
   file.hunks.forEach((h, hi) => {
-    rows.push({ kind: 'hunk', key: `h${hi}`, header: h.header });
+    gapRows(hi, h.header);
     const toks = highlightHunk(h.lines);
     const cell = (l: DiffLine): Cell => cellOf(l, toks.get(l.id) ?? []);
 
@@ -200,6 +265,7 @@ export function buildRows(
       }
     }
   });
+  if (file.hunks.length) gapRows(file.hunks.length, null);
   return rows;
 }
 

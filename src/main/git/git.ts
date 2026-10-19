@@ -29,6 +29,11 @@ export interface GitService {
     sha: string,
     entries: TreeEntry[],
   ): Promise<{ path: string; text: string }[]>;
+  /**
+   * Reads named files at one commit, with the same bounds as `sourceFiles`. A path that is
+   * missing, binary or too large is left out of the result.
+   */
+  filesAt(repo: RepoRef, sha: string, paths: string[]): Promise<{ path: string; text: string }[]>;
 }
 
 export interface TreeEntry {
@@ -67,11 +72,28 @@ const exists = (p: string): Promise<boolean> =>
     () => false,
   );
 
+/** `ls-tree -z` output; submodules (commit) and symlinks are not files to read. */
+const parseTree = (output: string): TreeEntry[] =>
+  output.split('\0').flatMap((line) => {
+    // `<mode> <type> <oid>\t<path>`
+    const match = /^100(?:644|755) blob ([0-9a-f]+)\t(.+)$/s.exec(line);
+    return match?.[1] && match[2] && OID.test(match[1]) && TREE_PATH.test(match[2])
+      ? [{ path: match[2], oid: match[1] }]
+      : [];
+  });
+
 type Run = (
   args: string[],
   timeoutMs: number,
   opts?: { input?: string; encoding?: 'utf8' | 'latin1' },
 ) => Promise<string>;
+
+interface RepoCtx {
+  run: Run;
+  bare: string;
+  cred: string[];
+  url: string;
+}
 
 export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs): GitService {
   // Work on one bare repo must not overlap (shallow and pack locks).
@@ -117,7 +139,7 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
     repo: RepoRef,
     shas: string[],
     why: string,
-    fn: (ctx: { run: Run; bare: string; cred: string[]; url: string }) => Promise<T>,
+    fn: (ctx: RepoCtx) => Promise<T>,
   ): Promise<T> => {
     if (!shas.every((s) => SHA.test(s)))
       throw new AppError('BAD_INPUT', 'Expected full commit SHAs.');
@@ -153,6 +175,93 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
         300_000,
       );
       return fn({ run, bare, cred, url });
+    });
+  };
+
+  /**
+   * Reads blobs of one commit, in order until the byte bounds are reached. Blobs the blobless
+   * cache does not hold yet are fetched in one request, not one per file.
+   */
+  const readBlobs = async (
+    { run, bare, cred, url }: RepoCtx,
+    sha: string,
+    entries: TreeEntry[],
+  ): Promise<{ path: string; text: string }[]> => {
+    const wanted = entries.filter((e) => OID.test(e.oid) && TREE_PATH.test(e.path));
+    const oids = [...new Set(wanted.map((e) => e.oid))];
+    if (!oids.length) return [];
+    // `--missing=print` lists what the blobless fetch left on GitHub without fetching it.
+    const listed = await run(
+      ['-C', bare, 'rev-list', '--objects', '--missing=print', sha],
+      120_000,
+    );
+    const missing = new Set(
+      listed
+        .split('\n')
+        .filter((line) => line.startsWith('?'))
+        .map((line) => line.slice(1).split(' ')[0]),
+    );
+    const fetch = oids.filter((oid) => missing.has(oid));
+    if (fetch.length) {
+      // The same request git makes for one lazily fetched blob, for all of them at once.
+      await run(
+        [
+          '-C',
+          bare,
+          ...cred,
+          'fetch',
+          '--quiet',
+          '--no-tags',
+          '--no-write-fetch-head',
+          '--recurse-submodules=no',
+          '--filter=blob:none',
+          '--stdin',
+          url,
+        ],
+        300_000,
+        { input: `${fetch.join('\n')}\n` },
+      );
+    }
+
+    const sizes = new Map<string, number>();
+    const checked = await run(['-C', bare, 'cat-file', '--batch-check'], 120_000, {
+      input: `${oids.join('\n')}\n`,
+    });
+    for (const line of checked.split('\n')) {
+      const [oid, type, size] = line.split(' ');
+      if (oid && type === 'blob') sizes.set(oid, Number(size));
+    }
+    const chosen = new Set<string>();
+    let usedBytes = 0;
+    for (const { oid } of wanted) {
+      const size = sizes.get(oid);
+      if (chosen.has(oid) || size === undefined || size > MAX_SOURCE_FILE_BYTES) continue;
+      if (usedBytes + size > MAX_SOURCE_BYTES) break;
+      usedBytes += size;
+      chosen.add(oid);
+    }
+    if (!chosen.size) return [];
+
+    // latin1 keeps one char per byte, so each blob is cut out by its byte size.
+    const output = await run(['-C', bare, 'cat-file', '--batch'], 120_000, {
+      input: `${[...chosen].join('\n')}\n`,
+      encoding: 'latin1',
+    });
+    const texts = new Map<string, string>();
+    for (let pos = 0; pos < output.length;) {
+      const end = output.indexOf('\n', pos);
+      if (end < 0) break;
+      const [oid, type, sizeText] = output.slice(pos, end).split(' ');
+      pos = end + 1;
+      const size = Number(sizeText);
+      if (!oid || type !== 'blob' || !Number.isSafeInteger(size)) continue;
+      const raw = output.slice(pos, pos + size);
+      pos += size + 1;
+      if (!raw.includes('\0')) texts.set(oid, Buffer.from(raw, 'latin1').toString('utf8'));
+    }
+    return wanted.flatMap(({ path, oid }) => {
+      const text = texts.get(oid);
+      return text === undefined ? [] : [{ path, text }];
     });
   };
 
@@ -219,93 +328,22 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
     treeEntries: (repo, sha) =>
       withRepo(repo, [sha], 'Impact map', async ({ run, bare }) => {
         const output = await run(['-C', bare, 'ls-tree', '-r', '-z', sha], 120_000);
-        return output.split('\0').flatMap((line) => {
-          // `<mode> <type> <oid>\t<path>`; submodules (commit) and symlinks are not files to read.
-          const match = /^100(?:644|755) blob ([0-9a-f]+)\t(.+)$/s.exec(line);
-          return match?.[1] && match[2] && OID.test(match[1]) && TREE_PATH.test(match[2])
-            ? [{ path: match[2], oid: match[1] }]
-            : [];
-        });
+        return parseTree(output);
       }),
 
     sourceFiles: (repo, sha, entries) =>
-      withRepo(repo, [sha], 'Impact map', async ({ run, bare, cred, url }) => {
-        const wanted = entries.filter((e) => OID.test(e.oid) && TREE_PATH.test(e.path));
-        const oids = [...new Set(wanted.map((e) => e.oid))];
-        if (!oids.length) return [];
-        // `--missing=print` lists what the blobless fetch left on GitHub without fetching it.
-        const listed = await run(
-          ['-C', bare, 'rev-list', '--objects', '--missing=print', sha],
-          120_000,
-        );
-        const missing = new Set(
-          listed
-            .split('\n')
-            .filter((line) => line.startsWith('?'))
-            .map((line) => line.slice(1).split(' ')[0]),
-        );
-        const fetch = oids.filter((oid) => missing.has(oid));
-        if (fetch.length) {
-          // The same request git makes for one lazily fetched blob, for all of them at once.
-          await run(
-            [
-              '-C',
-              bare,
-              ...cred,
-              'fetch',
-              '--quiet',
-              '--no-tags',
-              '--no-write-fetch-head',
-              '--recurse-submodules=no',
-              '--filter=blob:none',
-              '--stdin',
-              url,
-            ],
-            300_000,
-            { input: `${fetch.join('\n')}\n` },
-          );
-        }
+      withRepo(repo, [sha], 'Impact map', (ctx) => readBlobs(ctx, sha, entries)),
 
-        const sizes = new Map<string, number>();
-        const checked = await run(['-C', bare, 'cat-file', '--batch-check'], 120_000, {
-          input: `${oids.join('\n')}\n`,
-        });
-        for (const line of checked.split('\n')) {
-          const [oid, type, size] = line.split(' ');
-          if (oid && type === 'blob') sizes.set(oid, Number(size));
-        }
-        const chosen = new Set<string>();
-        let usedBytes = 0;
-        for (const { oid } of wanted) {
-          const size = sizes.get(oid);
-          if (chosen.has(oid) || size === undefined || size > MAX_SOURCE_FILE_BYTES) continue;
-          if (usedBytes + size > MAX_SOURCE_BYTES) break;
-          usedBytes += size;
-          chosen.add(oid);
-        }
-        if (!chosen.size) return [];
-
-        // latin1 keeps one char per byte, so each blob is cut out by its byte size.
-        const output = await run(['-C', bare, 'cat-file', '--batch'], 120_000, {
-          input: `${[...chosen].join('\n')}\n`,
-          encoding: 'latin1',
-        });
-        const texts = new Map<string, string>();
-        for (let pos = 0; pos < output.length;) {
-          const end = output.indexOf('\n', pos);
-          if (end < 0) break;
-          const [oid, type, sizeText] = output.slice(pos, end).split(' ');
-          pos = end + 1;
-          const size = Number(sizeText);
-          if (!oid || type !== 'blob' || !Number.isSafeInteger(size)) continue;
-          const raw = output.slice(pos, pos + size);
-          pos += size + 1;
-          if (!raw.includes('\0')) texts.set(oid, Buffer.from(raw, 'latin1').toString('utf8'));
-        }
-        return wanted.flatMap(({ path, oid }) => {
-          const text = texts.get(oid);
-          return text === undefined ? [] : [{ path, text }];
-        });
+    filesAt: (repo, sha, paths) =>
+      withRepo(repo, [sha], 'Expanding the diff', async (ctx) => {
+        const valid = paths.filter((p) => TREE_PATH.test(p));
+        if (!valid.length) return [];
+        // Literal pathspecs: a path like `:(glob)*` names a file, never a pattern.
+        const output = await ctx.run(
+          ['--literal-pathspecs', '-C', ctx.bare, 'ls-tree', '-z', sha, '--', ...valid],
+          60_000,
+        );
+        return readBlobs(ctx, sha, parseTree(output));
       }),
   };
 }
