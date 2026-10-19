@@ -345,7 +345,7 @@ function LoadedReview({
         onRerun={() => review.runReview(true)}
       />
       <div className="review-main-wrap">
-        <main className="review-main">
+        <main className={`review-main review-content-${content}`}>
           {open.header.kind === 'compare' ? (
             <CompareHeader
               meta={open.header.meta}
@@ -380,123 +380,127 @@ function LoadedReview({
             )
           )}
           <div className="toolbar" role="toolbar" aria-label="Diff view">
-            <Seg<ReviewContent>
-              name="review-content"
-              label="Review content"
-              value={content}
-              onChange={setContent}
-              options={[
-                { value: 'diff', label: 'Diff' },
-                { value: 'impact', label: 'Impact' },
-              ]}
-            />
+            <div className="toolbar-left">
+              <Seg<ReviewContent>
+                name="review-content"
+                label="Review content"
+                value={content}
+                onChange={setContent}
+                options={[
+                  { value: 'diff', label: 'Diff' },
+                  { value: 'impact', label: 'Impact' },
+                ]}
+              />
+              {content === 'diff' && (
+                <>
+                  <div className="viewed">
+                    <span>
+                      {viewedCount}/{reviewed.length} viewed
+                    </span>
+                    <span className="viewed-bar" aria-hidden="true">
+                      <span
+                        style={{
+                          width: `${reviewed.length ? (100 * viewedCount) / reviewed.length : 0}%`,
+                        }}
+                      />
+                    </span>
+                  </div>
+                  <Seg<Filter>
+                    name="filter"
+                    label="Filter notes"
+                    value={filter}
+                    onChange={setFilter}
+                    options={[
+                      {
+                        value: 'all',
+                        label: (
+                          <>
+                            All <span className="seg-count">{allNotes.length}</span>
+                          </>
+                        ),
+                      },
+                      {
+                        value: 'unseen',
+                        label: (
+                          <>
+                            Unseen <span className="seg-count">{unseen}</span>
+                          </>
+                        ),
+                      },
+                      {
+                        value: 'high',
+                        label: (
+                          <>
+                            High <span className="seg-count">{stats.high}</span>
+                          </>
+                        ),
+                      },
+                      {
+                        value: 'medium',
+                        label: (
+                          <>
+                            Medium <span className="seg-count">{stats.medium}</span>
+                          </>
+                        ),
+                      },
+                      {
+                        value: 'mine',
+                        label: (
+                          <>
+                            Mine <span className="seg-count">{stats.mine}</span>
+                          </>
+                        ),
+                      },
+                    ]}
+                  />
+                </>
+              )}
+            </div>
             {content === 'diff' && (
-              <>
-                <div className="viewed">
-                  <span>
-                    {viewedCount}/{reviewed.length} viewed
-                  </span>
-                  <span className="viewed-bar" aria-hidden="true">
-                    <span
-                      style={{
-                        width: `${reviewed.length ? (100 * viewedCount) / reviewed.length : 0}%`,
-                      }}
-                    />
-                  </span>
-                </div>
-                <Seg<Filter>
-                  name="filter"
-                  label="Filter notes"
-                  value={filter}
-                  onChange={setFilter}
+              <div className="toolbar-right">
+                <button
+                  className="btn btn-secondary nav-note"
+                  onClick={() => {
+                    const previous = stepNote(nav, current, -1);
+                    if (previous) jumpNote(previous);
+                  }}
+                  disabled={!nav.length}
+                >
+                  <Icon name="arrowUp" />
+                  Previous
+                </button>
+                <Seg<ViewMode>
+                  name="view"
+                  label="Diff layout"
+                  value={mode}
+                  onChange={setMode}
                   options={[
-                    {
-                      value: 'all',
-                      label: (
-                        <>
-                          All <span className="seg-count">{allNotes.length}</span>
-                        </>
-                      ),
-                    },
-                    {
-                      value: 'unseen',
-                      label: (
-                        <>
-                          Unseen <span className="seg-count">{unseen}</span>
-                        </>
-                      ),
-                    },
-                    {
-                      value: 'high',
-                      label: (
-                        <>
-                          High <span className="seg-count">{stats.high}</span>
-                        </>
-                      ),
-                    },
-                    {
-                      value: 'medium',
-                      label: (
-                        <>
-                          Medium <span className="seg-count">{stats.medium}</span>
-                        </>
-                      ),
-                    },
-                    {
-                      value: 'mine',
-                      label: (
-                        <>
-                          Mine <span className="seg-count">{stats.mine}</span>
-                        </>
-                      ),
-                    },
+                    { value: 'unified', label: 'Unified' },
+                    { value: 'split', label: 'Split' },
                   ]}
                 />
-                <div className="toolbar-right">
-                  <button
-                    className="btn btn-secondary nav-note"
-                    onClick={() => {
-                      const previous = stepNote(nav, current, -1);
-                      if (previous) jumpNote(previous);
-                    }}
-                    disabled={!nav.length}
-                  >
-                    <Icon name="arrowUp" />
-                    Previous
-                  </button>
-                  <Seg<ViewMode>
-                    name="view"
-                    label="Diff layout"
-                    value={mode}
-                    onChange={setMode}
-                    options={[
-                      { value: 'unified', label: 'Unified' },
-                      { value: 'split', label: 'Split' },
-                    ]}
-                  />
-                  <Seg<Density>
-                    name="density"
-                    label="Review density"
-                    value={density}
-                    onChange={setDensity}
-                    options={[
-                      { value: 'comfortable', label: 'Comfortable' },
-                      { value: 'compact', label: 'Compact' },
-                    ]}
-                  />
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      const next = stepNote(nav, current, 1);
-                      if (next) jumpNote(next);
-                    }}
-                    disabled={!nav.length}
-                  >
-                    <Icon name="arrowDown" />
-                    Next note
-                  </button>
-                </div>
-              </>
+                <Seg<Density>
+                  name="density"
+                  label="Review density"
+                  value={density}
+                  onChange={setDensity}
+                  options={[
+                    { value: 'comfortable', label: 'Comfortable' },
+                    { value: 'compact', label: 'Compact' },
+                  ]}
+                />
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    const next = stepNote(nav, current, 1);
+                    if (next) jumpNote(next);
+                  }}
+                  disabled={!nav.length}
+                >
+                  <Icon name="arrowDown" />
+                  Next note
+                </button>
+              </div>
             )}
           </div>
           {content === 'diff' ? (

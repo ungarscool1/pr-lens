@@ -835,8 +835,10 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    container: review-main / inline-size;
   }
   .review-main {
+    --toolbar-height: 58px;
     flex: 1;
     overflow-y: auto;
     min-height: 0;
@@ -1039,15 +1041,21 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    height: 52px;
+    height: var(--toolbar-height);
     background: var(--bg);
     border-block: 1px solid var(--line);
     padding: 0 28px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    overflow: hidden;
+  }
+  .toolbar-left {
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 14px;
-    overflow-x: auto;
-    overflow-y: hidden;
   }
   .toolbar .seg,
   .viewed,
@@ -1080,7 +1088,6 @@
     transition: width 0.2s;
   }
   .toolbar-right {
-    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1102,7 +1109,7 @@
   }
   .file-head {
     position: sticky;
-    top: 52px;
+    top: var(--toolbar-height);
     z-index: 4;
     display: flex;
     align-items: center;
@@ -2079,7 +2086,7 @@
     background: var(--n1);
   }
   .toolbar {
-    height: 58px;
+    height: var(--toolbar-height);
     background: color-mix(in srgb, var(--bg) 94%, var(--n1));
     border-block-color: color-mix(in srgb, var(--text) 10%, transparent);
     padding-inline: 32px;
@@ -2095,7 +2102,7 @@
     box-shadow: none;
   }
   .file-head {
-    top: 58px;
+    top: var(--toolbar-height);
     margin: 0;
     border-radius: 9px 9px 0 0;
     background: var(--n1);
@@ -2103,6 +2110,36 @@
   }
   .file:has(.file-toggle[aria-expanded='false']) .file-head {
     border-radius: 9px;
+  }
+  @container review-main (max-width: 1340px) {
+    .review-main.review-content-diff {
+      --toolbar-height: 102px;
+    }
+    .review-content-diff .toolbar {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      padding-block: 8px;
+    }
+    .review-content-diff .toolbar-right {
+      justify-self: start;
+    }
+  }
+  @container review-main (max-width: 650px) {
+    .review-content-diff .toolbar {
+      height: auto;
+      min-height: var(--toolbar-height);
+      grid-template-rows: auto;
+      padding-block: 10px;
+    }
+    .review-content-diff .toolbar-left,
+    .review-content-diff .toolbar-right {
+      flex-wrap: wrap;
+    }
+    .review-content-diff .file-head {
+      position: relative;
+      top: auto;
+    }
   }
   .diff {
     overflow: hidden;
