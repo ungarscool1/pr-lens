@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { remarkGithubRefs, resolveHref } from './markdown';
+import { hidesText, remarkGithubRefs, resolveHref } from './markdown';
 
 const repo = { owner: 'acme', repo: 'api' };
 const paragraph = (value: string) => ({
@@ -52,4 +52,24 @@ describe('resolveHref', () => {
     ['mailto:a@b.com', null],
     [undefined, null],
   ])('%s → %s', (href, expected) => expect(resolveHref(href, base)).toBe(expected));
+});
+
+describe('hidesText', () => {
+  const html = (value: string) => ({ type: 'root', children: [{ type: 'html', value }] });
+  it.each([
+    ['<!-- Describe your change -->', false],
+    ['<br>', false],
+    ['<script>', false],
+    ['<details><summary>Logs</summary>', true],
+    ['<script>\nalert(1)\n\nEverything after an unclosed script', true],
+    ['<!-- unterminated comment\nstill a comment', false],
+  ])('%j → %s', (value, expected) => expect(hidesText(html(value))).toBe(expected));
+
+  it('looks inside nested nodes', () => {
+    const tree = {
+      type: 'root',
+      children: [{ type: 'paragraph', children: [{ type: 'html', value: '<kbd>Ctrl</kbd>' }] }],
+    };
+    expect(hidesText(tree)).toBe(true);
+  });
 });

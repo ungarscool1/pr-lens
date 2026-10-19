@@ -50,6 +50,20 @@ export function remarkGithubRefs(repo: RepoRef) {
 }
 
 /**
+ * Whether skipped raw HTML held text the reader would otherwise miss: a `<details>` summary, or
+ * everything after a `<script>` that is never closed. Comments and bare tags alone hide nothing.
+ */
+export function hidesText(tree: MdNode): boolean {
+  if (tree.type === 'html') {
+    const text = (tree.value ?? '')
+      .replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+      .replace(/<\/?[A-Za-z][^>]*>/g, '');
+    return text.trim() !== '';
+  }
+  return (tree.children ?? []).some(hidesText);
+}
+
+/**
  * Where a link in a description goes: absolute http(s) as is, a relative path into the repository
  * at the reviewed commit, and anything else (in-page anchors, other schemes) nowhere.
  */
