@@ -4,6 +4,7 @@ import type { PrMeta, PrRef } from '../../../../shared/pr';
 import type { ReviewDecision } from '../../../../shared/ipc';
 import { Icon } from '../../ds';
 import { openExternal } from '../../lib/api';
+import { Markdown } from './Markdown';
 
 interface Props {
   prRef: PrRef;
@@ -16,8 +17,16 @@ interface Props {
 
 const STATE_LABEL = { OPEN: 'Open', CLOSED: 'Closed', MERGED: 'Merged' } as const;
 
+/** `#n` in an issue body refers to the issue's own repository, which may differ from the PR's. */
+const repoOfIssue = (url: string, fallback: PrRef): { owner: string; repo: string } => {
+  const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/\d+/.exec(url);
+  return match?.[1] && match[2] ? { owner: match[1], repo: match[2] } : fallback;
+};
+
 export function PrHeader({ prRef: ref, meta, children, canSubmitReview, onSubmitReview }: Props) {
   const [showDesc, setShowDesc] = useState(false);
+  // Relative links in a description point into the repository at the reviewed commit.
+  const base = `https://github.com/${ref.owner}/${ref.repo}/blob/${meta.headSha}/`;
 
   return (
     <div className="pr-head">
@@ -65,15 +74,19 @@ export function PrHeader({ prRef: ref, meta, children, canSubmitReview, onSubmit
         <div className="desc-grid">
           <div className="desc-box">
             <span className="kicker-mono">Description · {meta.author}</span>
-            {/* Shown as plain text: PR bodies are untrusted, so no markdown/HTML rendering. */}
-            <p className="desc-text">{meta.body.trim() || 'No description provided.'}</p>
+            {meta.body.trim() ? (
+              <Markdown text={meta.body} repo={ref} base={base} />
+            ) : (
+              <p className="desc-text">No description provided.</p>
+            )}
           </div>
           {meta.linkedIssues.map((i) => (
             <div key={i.number} className="desc-box">
               <span className="kicker-mono">Linked issue #{i.number} · closes</span>
-              <p className="desc-text">
-                <b>{i.title}.</b> {i.body.trim()}
-              </p>
+              <b className="desc-title">{i.title}</b>
+              {i.body.trim() && (
+                <Markdown text={i.body} repo={repoOfIssue(i.url, ref)} base={base} />
+              )}
             </div>
           ))}
         </div>

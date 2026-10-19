@@ -17,7 +17,7 @@ renderer (React, sandboxed)  ──window.prLens──▶  preload (contextBridg
 Window: `contextIsolation`, `sandbox`, no `nodeIntegration`, strict CSP (`script-src 'self'`,
 no remote origins), navigation and `window.open` blocked, `webview` blocked, permission
 requests denied except clipboard write. External links go through `shell.openExternal` only
-for `https://` URLs on an allow-list (`src/main/shell/external.ts`).
+for `https://` URLs on an allow-list (`src/shared/external.ts`, also used by the renderer to decide what a link does).
 
 ## IPC
 
@@ -177,6 +177,14 @@ component classes, diff/severity states, and the system dark theme. `ds/` holds 
 wrappers over those classes. The diff uses blue additions and red deletions, with `+`/`−` markers
 and labels so the state is never conveyed by colour alone. `features/review/model.ts` holds the
 pure view logic (note ordering, filters, row building, intra-line highlights) and is unit-tested.
+
+PR descriptions and linked issues are untrusted markdown. `features/review/Markdown.tsx` renders
+them with `react-markdown` and `remark-gfm` (tables, task lists, strikethrough, autolinks) to React
+elements, never to HTML: raw HTML in the source is skipped, so template `<!-- -->` hints vanish
+and nothing executes. `lib/markdown.ts` links `#123` to the repository's issue and `@login` to the
+profile, and resolves relative links against the repository at the reviewed head. Links on the
+`openExternal` allow-list open in the browser; any other link copies its address. Images become
+links, since the CSP blocks remote images.
 
 ### Function impact map
 
