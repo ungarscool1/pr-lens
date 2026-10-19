@@ -133,7 +133,9 @@ describe('GitHub PR context', () => {
                 },
                 baseRef: {
                   target: {
-                    dotGitHubCodeowners: { text: 'src/** @acme/platform\ndocs/ @writer\n' },
+                    dotGitHubCodeowners: {
+                      object: { text: 'src/** @acme/platform\ndocs/ @writer\n' },
+                    },
                     rootCodeowners: null,
                     docsCodeowners: null,
                   },
@@ -222,5 +224,8 @@ describe('GitHub PR context', () => {
     expect(exec).toHaveBeenCalledWith(
       expect.objectContaining({ args: expect.arrayContaining(['-F', 'number=12']) }),
     );
+    const graphqlCall = vi.mocked(exec).mock.calls[0]?.[0];
+    const query = graphqlCall?.args.find((arg) => arg.startsWith('query='));
+    expect(query).toContain('object { ... on Blob { text } }');
   });
 });
