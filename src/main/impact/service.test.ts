@@ -120,4 +120,60 @@ describe('impact service', () => {
     expect(impactKey(diff, {})).not.toBe(impactKey(diff, { go: '/u/gopls' }));
     expect(impactKey(diff, { go: '/u/gopls' })).toBe(impactKey(diff, { go: '/u/gopls' }));
   });
+
+  it('runs the built-in Terraform analyzer without a language server checkout', async () => {
+    const terraformDiff: DiffModel = { files: [file('TF', 'infra/main.tf')] };
+    const git = {
+      treeEntries: async () => [{ path: 'infra/main.tf', oid: 'a'.repeat(40) }],
+      sourceFiles: vi.fn(async () => [
+        {
+          path: 'infra/main.tf',
+          text: 'data "terraform_remote_state" "core" {\n  backend = "s3"\n}\n',
+        },
+      ]),
+      worktree: vi.fn(),
+    } as unknown as GitService;
+    const review = {
+      loaded: () =>
+        ({
+          target: {
+            key: 'k',
+            subject: { kind: 'pr', ref: { owner: 'o', repo: 'r', number: 1 } },
+            headSha: HEAD,
+          },
+          diff: terraformDiff,
+        }) as unknown as LoadedTarget,
+    } as unknown as ReviewService;
+    const putImpact = vi.fn(async () => undefined);
+    const cache = { getImpact: async () => null, putImpact } as unknown as AnalysisCache;
+    const run = vi.fn();
+    const service = createImpactService({
+      git,
+      review,
+      cache,
+      analyze: async () => map('ts'),
+      servers: { paths: () => ({}), run },
+    });
+
+    const result = await service.get('k');
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        name: 'data.terraform_remote_state.core',
+        kind: 'data',
+        changed: true,
+      }),
+    ]);
+    expect(result.languages).toEqual([
+      {
+        language: 'terraform',
+        label: 'Terraform',
+        status: 'mapped',
+        detail: 'built in',
+      },
+    ]);
+    expect(git.worktree).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    expect(putImpact).toHaveBeenCalledOnce();
+  });
 });
