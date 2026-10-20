@@ -110,6 +110,8 @@ function ImpactGraph({
                 <span className="impact-node-kind">test</span>
               ) : node.kind === 'module' ? (
                 <span className="impact-node-kind">top level</span>
+              ) : node.kind === 'workflow' || node.kind === 'action' ? (
+                <span className="impact-node-kind">{node.kind}</span>
               ) : outside ? (
                 <Icon name="arrowUpRight" size={12} />
               ) : null}
@@ -143,9 +145,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
   if (state.kind === 'loading' || state.targetKey !== targetKey)
     return (
       <section className="impact-page">
-        <p className="impact-loading">
-          Building the call graph with the TypeScript language service…
-        </p>
+        <p className="impact-loading">Building the impact map…</p>
       </section>
     );
   if (state.kind === 'error') {
@@ -160,11 +160,11 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
   const { map } = state;
   const changed = map.nodes.filter((node) => node.changed).length;
   return (
-    <section className="impact-page" aria-label="Function impact map">
+    <section className="impact-page" aria-label="Impact map">
       <header className="impact-head">
         <div>
-          <span className="card-kicker">Call hierarchy</span>
-          <h2>Function impact</h2>
+          <span className="card-kicker">Calls and dependencies</span>
+          <h2>Impact map</h2>
           <p>
             {changed} changed · {map.nodes.length - changed} connected · {map.scannedFiles} source
             files scanned
@@ -196,13 +196,13 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
       )}
       {map.omittedChanged > 0 && (
         <p className="impact-none">
-          {map.omittedChanged} more changed function{map.omittedChanged === 1 ? ' is' : 's are'} not
+          {map.omittedChanged} more changed item{map.omittedChanged === 1 ? ' is' : 's are'} not
           drawn, to keep the graph readable.
         </p>
       )}
       {!changed ? (
         <p className="impact-empty">
-          No changed functions were found in the languages mapped for this diff.
+          No changed functions, workflows or actions were found in the files mapped for this diff.
         </p>
       ) : (
         <ImpactGraph map={map} diffPaths={diffPaths} onOpen={onOpenNode} />
@@ -226,7 +226,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
               ))}
             </ul>
           ) : (
-            <p className="impact-none">No imports in changed function files.</p>
+            <p className="impact-none">No imports in changed files.</p>
           )}
         </section>
         <section className="impact-section">
@@ -256,10 +256,10 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
         </section>
       </div>
       <p className="impact-disclaimer">
-        Built locally from the head commit with each language's call hierarchy, the same one an
-        editor shows: TypeScript's built in, others from the language servers set in Settings. Calls
-        the language service cannot resolve, or into code outside this repository, are not drawn
-        rather than guessed.
+        Built locally from the head commit using language call hierarchies and local GitHub Actions
+        uses references. TypeScript and GitHub Actions are built in; other languages use the servers
+        set in Settings. Workflows and actions are mapped as whole files. Unresolved calls and
+        external actions are omitted.
       </p>
     </section>
   );

@@ -18,7 +18,9 @@ and what is not built.
   Line Tools (`xcode-select --install`); `brew install git` works too. No Xcode needed.
 - Optional, for the **Impact** map of Go or Python changes: your own `gopls` or
   `pyright-langserver` / `basedpyright-langserver`, with its path set in Settings. TypeScript and
-  JavaScript need nothing extra.
+  JavaScript need nothing extra. GitHub Actions workflows and internal actions are also built in.
+  Their Impact map links local `uses:` references, including reusable workflows and composite
+  actions. Each workflow or action is shown as a whole file; external actions are omitted.
 
 ## Setup
 

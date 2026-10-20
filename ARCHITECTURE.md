@@ -208,10 +208,11 @@ end of the file has its own row. Added, deleted and binary files have nothing hi
    map points at in a diff file but outside its hunks is revealed the shorter way into its gap,
    then centred, instead of only scrolling to the file.
 
-### Function impact map
+### Impact map
 
 The Review toolbar has an **Impact** mode: a call graph of the changed functions, their direct
-callers and their direct callees. It is built locally and deterministically, with no model.
+callers and their direct callees, plus workflows and internal GitHub Actions. It is built locally
+and deterministically, with no model.
 
 1. `src/main/impact/service.ts` lists the head commit's tree in the bare cache repo
    (`git.treeEntries`) and picks up to 1,200 TypeScript/JavaScript files: changed files first,
@@ -237,6 +238,21 @@ callers and their direct callees. It is built locally and deterministically, wit
    under HTML buttons. Clicking a changed function switches to Diff mode and centres its first
    changed line; a function elsewhere in the diff goes to its lines, revealing them when they
    sit between hunks; one outside the diff opens on GitHub at the head SHA.
+
+#### GitHub Actions (`src/main/impact/github-actions.ts`)
+
+Workflow files directly under `.github/workflows/` and `action.yml`/`action.yaml` definitions
+anywhere in the repository are mapped as whole-file nodes. The service reads up to 1,200
+definitions from the head snapshot, changed files first, with the same blob byte limits as
+TypeScript. YAML is parsed as data with bounded alias expansion; no workflow, expression or action
+is executed. Invalid YAML is counted as skipped.
+
+Edges follow job-level `uses` of local reusable workflows and step-level `uses` of local actions,
+including steps inside composite actions. Local paths resolve from the repository root, including
+inside composites. Only definitions present in the snapshot resolve; remote actions, Docker
+images, dynamic references and missing targets are omitted. The graph includes up to 60 changed
+definitions and their direct callers/callees, anchors changes to their first changed diff line,
+and merges with the language maps. GitHub Actions changed lines also participate in the cache key.
 
 #### Other languages: the user's own language servers (`src/main/impact/lsp`)
 

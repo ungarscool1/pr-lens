@@ -16,9 +16,11 @@ import {
   ANALYZER_VERSION,
   changedLines,
   isConfigPath,
+  isGitHubActionsPath,
   isImpactSource,
   isTestPath,
 } from './changes';
+import { analyzeGitHubActions } from './github-actions';
 
 const MAX_CANDIDATE_FILES = 1_200;
 
@@ -45,7 +47,8 @@ interface Deps {
   };
 }
 
-const isMappable = (path: string): boolean => isImpactSource(path) || lspLanguageOf(path) !== null;
+const isMappable = (path: string): boolean =>
+  isImpactSource(path) || isGitHubActionsPath(path) || lspLanguageOf(path) !== null;
 
 /** A stored map is reused only by the same analyzers and servers for the same changed lines. */
 export function impactKey(
@@ -151,11 +154,12 @@ export function createImpactService({ git, review, cache, analyze, servers }: De
     const { subject, headSha } = loaded.target;
     const { diff } = loaded;
     const tsChanged = changedLines(diff).size > 0;
+    const actionsChanged = changedLines(diff, isGitHubActionsPath).size > 0;
     const lspChanged = LspLanguage.options.filter(
       (language) =>
         changedLines(diff, (path) => LSP_LANGUAGES[language].extensions.test(path)).size > 0,
     );
-    if (!tsChanged && !lspChanged.length) return EMPTY;
+    if (!tsChanged && !actionsChanged && !lspChanged.length) return EMPTY;
     const paths = servers.paths();
     const key = impactKey(diff, paths);
     const stored = await cache.getImpact(subject, headSha, key);
@@ -172,6 +176,30 @@ export function createImpactService({ git, review, cache, analyze, servers }: De
         label: 'TypeScript / JavaScript',
         status: 'mapped',
         detail: 'built in',
+      });
+    }
+    if (actionsChanged) {
+      const definitions = tree.filter((entry) => isGitHubActionsPath(entry.path));
+      const sources = await git.sourceFiles(
+        repo,
+        headSha,
+        prioritize(definitions, new Set(changedLines(diff, isGitHubActionsPath).keys())).slice(
+          0,
+          MAX_CANDIDATE_FILES,
+        ),
+      );
+      parts.push(
+        analyzeGitHubActions({
+          sources,
+          diff,
+          skippedFiles: definitions.length - sources.length,
+        }),
+      );
+      languages.push({
+        language: 'github-actions',
+        label: 'GitHub Actions',
+        status: 'mapped',
+        detail: 'local workflow and action references',
       });
     }
     let root: string | null = null;

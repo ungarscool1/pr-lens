@@ -1,15 +1,14 @@
 import { z } from 'zod';
 
 /**
- * A function-level call graph around the changed code, built locally from a language service's
- * call hierarchy (what an editor's LSP shows): TypeScript's built in, others from a language
- * server the user installed. No model is involved.
+ * A call graph around changed functions, workflows and internal actions, built locally from
+ * language call hierarchies and GitHub Actions `uses` references. No model is involved.
  */
 export const ImpactNode = z.object({
-  /** `<path>#<offset of the declaration name>`: unique and stable for one head SHA. */
+  /** `<path>#<declaration offset>`; whole-file workflow/action nodes use offset 0. */
   id: z.string(),
   name: z.string(),
-  /** The language service's kind: `function`, `method`, `class`, `module` (top-level code)… */
+  /** `function`, `method`, `class`, `module` (top-level code), `workflow`, `action`… */
   kind: z.string(),
   /** Enclosing class or namespace, when the language service names one. */
   container: z.string().nullable(),
@@ -18,7 +17,7 @@ export const ImpactNode = z.object({
   endLine: z.number().int().positive(),
   changed: z.boolean(),
   test: z.boolean(),
-  /** Changed nodes only: the first added or deleted diff line inside the declaration. */
+  /** Changed nodes only: the first added or deleted diff line inside the declaration/file. */
   anchorLineId: z.string().nullable(),
 });
 export type ImpactNode = z.infer<typeof ImpactNode>;
@@ -26,7 +25,7 @@ export type ImpactNode = z.infer<typeof ImpactNode>;
 export const ImpactEdge = z.object({
   /** The caller. */
   from: z.string(),
-  /** The function being called (or rendered, for a JSX element). */
+  /** The function being called, JSX component rendered, or local workflow/action used. */
   to: z.string(),
 });
 export type ImpactEdge = z.infer<typeof ImpactEdge>;
@@ -47,7 +46,7 @@ export const ImpactTest = z.object({
 export type ImpactTest = z.infer<typeof ImpactTest>;
 
 export const ImpactLanguage = z.object({
-  /** `typescript`, or an LSP language id. */
+  /** `typescript`, `github-actions`, or an LSP language id. */
   language: z.string(),
   label: z.string(),
   /** `off`: changed files in this language, but no language server is set up for it. */
@@ -57,7 +56,7 @@ export const ImpactLanguage = z.object({
 export type ImpactLanguage = z.infer<typeof ImpactLanguage>;
 
 export const ImpactMap = z.object({
-  /** Changed functions and their direct callers and callees. */
+  /** Changed declarations/files and their direct callers and callees. */
   nodes: z.array(ImpactNode),
   edges: z.array(ImpactEdge),
   /** Imports made by files that contain a changed function. */
@@ -66,7 +65,7 @@ export const ImpactMap = z.object({
   tests: z.array(ImpactTest),
   scannedFiles: z.number().int().nonnegative(),
   skippedFiles: z.number().int().nonnegative(),
-  /** Changed functions left out of the graph to keep it bounded. */
+  /** Changed declarations/files left out of the graph to keep it bounded. */
   omittedChanged: z.number().int().nonnegative(),
   /** One entry per language with changed source files. */
   languages: z.array(ImpactLanguage),
