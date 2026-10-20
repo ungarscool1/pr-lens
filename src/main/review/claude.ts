@@ -10,8 +10,10 @@ import type { ToolchainService } from '../exec/toolchain';
 export interface ClaudeRunRequest {
   prompt: string;
   systemPrompt: string;
-  /** An empty directory: no CLAUDE.md, no repo files for the CLI to pick up. */
+  /** An empty directory: no repository-controlled CLAUDE.md or settings are loaded from cwd. */
   cwd: string;
+  /** Optional repository snapshot exposed through read/search tools, never Bash or write tools. */
+  repositoryDir?: string;
   model: string | null;
   timeoutMs: number;
   signal: AbortSignal;
@@ -60,6 +62,7 @@ export function reviewArgs(
   systemPrompt: string,
   model: string | null,
   jsonSchema: string = REVIEW_JSON_SCHEMA,
+  repositoryDir?: string,
 ): string[] {
   return [
     '-p',
@@ -70,7 +73,8 @@ export function reviewArgs(
     '--json-schema',
     jsonSchema,
     '--tools',
-    '',
+    repositoryDir ? 'Read,Glob,Grep' : '',
+    ...(repositoryDir ? [`--add-dir=${repositoryDir}`] : []),
     '--strict-mcp-config',
     '--setting-sources',
     '',
@@ -144,7 +148,7 @@ export function createClaudeClient(
     const run = async (): Promise<ClaudeRunResult<T>> => {
       const res = await exec({
         file: requireBin(tc.claude, 'claude'),
-        args: reviewArgs(req.systemPrompt, req.model, jsonSchema),
+        args: reviewArgs(req.systemPrompt, req.model, jsonSchema, req.repositoryDir),
         cwd: req.cwd,
         env: claudeEnv(tc, await oauthToken()),
         input: req.prompt,

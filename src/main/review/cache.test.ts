@@ -9,11 +9,7 @@ import { SAMPLE_DIFF } from '../diff/fixtures';
 import type { GitHubClient } from '../github/gh';
 import type { SettingsService } from '../settings/settings';
 import { createJsonStore } from '../store/json-store';
-import {
-  ANALYSIS_CACHE_MAX_AGE_MS,
-  createAnalysisCache,
-  settingsKey,
-} from './cache';
+import { ANALYSIS_CACHE_MAX_AGE_MS, createAnalysisCache, settingsKey } from './cache';
 import type { ClaudeClient } from './claude';
 import { createReviewService } from './service';
 
@@ -193,11 +189,12 @@ describe('review service with the cache', () => {
     s = settings,
   ) => {
     const events: ReviewEvent[] = [];
+    const worktree = vi.fn(async () => '/repo/acme__api__pr812__9bd04e1');
     const svc = createReviewService({
       github,
       git: {
         directDiff: () => Promise.reject(new Error('unused')),
-        worktree: () => Promise.reject(new Error('unused')),
+        worktree,
         treeEntries: () => Promise.reject(new Error('unused')),
         sourceFiles: () => Promise.reject(new Error('unused')),
         filesAt: () => Promise.reject(new Error('unused')),
@@ -215,7 +212,7 @@ describe('review service with the cache', () => {
         events.length = 0;
         return e;
       });
-    return { svc, done };
+    return { svc, done, worktree };
   };
 
   it('serves a review from disk after a restart, and re-runs only on force', async () => {
@@ -236,10 +233,19 @@ describe('review service with the cache', () => {
     b.svc.start(reopened.target.key, false, 'review');
     expect(await b.done()).toMatchObject({ type: 'done', cache: { from: 'cache' } });
     expect(second.review).not.toHaveBeenCalled();
+    expect(b.worktree).not.toHaveBeenCalled();
 
     b.svc.start(reopened.target.key, true, 'review');
     expect(await b.done()).toMatchObject({ type: 'done', cache: { from: 'run' } });
     expect(second.review).toHaveBeenCalledTimes(1);
+    expect(second.review).toHaveBeenCalledWith(
+      expect.objectContaining({ repositoryDir: '/repo/acme__api__pr812__9bd04e1' }),
+    );
+    expect(b.worktree).toHaveBeenCalledWith(
+      { owner: 'acme', repo: 'api' },
+      HEAD,
+      'acme__api__pr812__9bd04e1',
+    );
   });
 
   it('marks a cached review stale after a settings change', async () => {

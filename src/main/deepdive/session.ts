@@ -4,6 +4,10 @@ import type { Subject } from '../../shared/subject';
 import type { ResolvedNote } from '../notes/resolve';
 import { redactSecrets } from '../review/secrets';
 
+// Kept as a re-export for callers that used the deep-dive helper before it became shared by
+// automatic reviews too.
+export { worktreeName } from '../../shared/subject';
+
 /** What the deep dive needs of a note. */
 export type DeepDiveNote = Pick<
   ResolvedNote,
@@ -11,15 +15,6 @@ export type DeepDiveNote = Pick<
 >;
 
 const sha7 = (s: string): string => s.slice(0, 7);
-
-/** Stable per (subject, head): `acme__api__pr812__9bd04e1`, reused across notes of one review. */
-export function worktreeName(subject: Subject, headSha: string): string {
-  const base =
-    subject.kind === 'pr'
-      ? `${subject.ref.owner}__${subject.ref.repo}__pr${subject.ref.number}`
-      : `${subject.owner}__${subject.repo}__cmp`;
-  return `${base}__${sha7(headSha)}`.replace(/[^A-Za-z0-9._-]/g, '_');
-}
 
 export function subjectTitle(subject: Subject, header: Header): { what: string; title: string } {
   if (header.kind === 'pr') {

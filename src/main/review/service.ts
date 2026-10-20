@@ -4,7 +4,7 @@ import type { DiffModel } from '../../shared/diff';
 import type { CompareInput, Header, OpenResult } from '../../shared/ipc';
 import { parsePrInput } from '../../shared/pr';
 import type { Estimate, ReviewEvent } from '../../shared/review';
-import { targetKeyOf } from '../../shared/subject';
+import { repoOf, targetKeyOf, worktreeName } from '../../shared/subject';
 import type { CompareMeta, Subject, Target } from '../../shared/subject';
 import { buildDiffModel } from '../diff/parse';
 import type { GitService } from '../git/git';
@@ -161,10 +161,18 @@ export function createReviewService(deps: Deps): ReviewService {
       });
       return;
     }
+    deps.emit({ ...base, type: 'progress', message: 'Preparing repository context…' });
+    const repositoryDir = await deps.git.worktree(
+      repoOf(subject),
+      headSha,
+      worktreeName(subject, headSha),
+    );
+    if (signal.aborted) throw new AppError('CANCELLED');
     const analysis = await runReviewPipeline(deps.claude, {
       ...loaded,
       settings,
       sandboxDir: deps.sandboxDir,
+      repositoryDir,
       budget: deps.chunkBudget,
       signal,
       limit,

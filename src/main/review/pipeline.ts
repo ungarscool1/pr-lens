@@ -20,6 +20,8 @@ export interface PipelineInput {
   diff: DiffModel;
   settings: Pick<Settings, 'maxNotes' | 'model' | 'reviewTimeoutSec'>;
   sandboxDir: string;
+  /** Detached checkout at the reviewed head, available to review passes as read-only context. */
+  repositoryDir?: string;
   signal: AbortSignal;
   onProgress: (message: string) => void;
   /** Shared process limiter: at most N claude children across all jobs. */
@@ -61,13 +63,18 @@ export async function runReviewPipeline(
   let done = 0;
   const settled = await Promise.allSettled(
     plan.prompts.map((p) =>
-      call(() => claude.review({ ...base, prompt: p.prompt, systemPrompt: SYSTEM_PROMPT })).then(
-        (r) => {
-          done++;
-          if (total > 1) input.onProgress(`Reviewed ${done} of ${total} chunks…`);
-          return r;
-        },
-      ),
+      call(() =>
+        claude.review({
+          ...base,
+          repositoryDir: input.repositoryDir,
+          prompt: p.prompt,
+          systemPrompt: SYSTEM_PROMPT,
+        }),
+      ).then((r) => {
+        done++;
+        if (total > 1) input.onProgress(`Reviewed ${done} of ${total} chunks…`);
+        return r;
+      }),
     ),
   );
   if (signal.aborted) throw new AppError('CANCELLED');

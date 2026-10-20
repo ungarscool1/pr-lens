@@ -45,6 +45,18 @@ export type Subject = z.infer<typeof Subject>;
 export const repoOf = (s: Subject): RepoRef =>
   s.kind === 'pr' ? { owner: s.ref.owner, repo: s.ref.repo } : { owner: s.owner, repo: s.repo };
 
+/**
+ * Stable per (subject, head) checkout name. Reviews and deep dives deliberately share it, so
+ * opening a deep dive after a review reuses the same detached worktree without another fetch.
+ */
+export function worktreeName(subject: Subject, headSha: string): string {
+  const base =
+    subject.kind === 'pr'
+      ? `${subject.ref.owner}__${subject.ref.repo}__pr${subject.ref.number}`
+      : `${subject.owner}__${subject.repo}__cmp`;
+  return `${base}__${headSha.slice(0, 7)}`.replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
 /** File-name-safe and stable: notes and cached analyses are stored under it. */
 export function subjectSlug(s: Subject): string {
   if (s.kind === 'pr') return `${s.ref.owner}__${s.ref.repo}__${s.ref.number}`;

@@ -43,11 +43,11 @@ const meta: PrMeta = {
 
 /** Answers each chunk with one high note on the first line it was shown (plus one bogus note). */
 function fakeClaude(opts: { failChunk?: number; failMerge?: boolean } = {}) {
-  const calls: { kind: 'review' | 'merge'; prompt: string }[] = [];
+  const calls: { kind: 'review' | 'merge'; prompt: string; repositoryDir?: string }[] = [];
   const client: ClaudeClient = {
     health: () => Promise.reject(new Error('unused')),
     async review(req: ClaudeRunRequest) {
-      calls.push({ kind: 'review', prompt: req.prompt });
+      calls.push({ kind: 'review', prompt: req.prompt, repositoryDir: req.repositoryDir });
       const chunk = Number(/chunk="(\d+)\//.exec(req.prompt)?.[1]);
       if (chunk === opts.failChunk) throw new AppError('MODEL_ERROR');
       const m = /^(F(\d+)-\d+) \+ (.*)$/m.exec(req.prompt);
@@ -82,7 +82,7 @@ function fakeClaude(opts: { failChunk?: number; failMerge?: boolean } = {}) {
     },
     release: () => Promise.reject(new Error('unused')),
     async merge(req: ClaudeRunRequest) {
-      calls.push({ kind: 'merge', prompt: req.prompt });
+      calls.push({ kind: 'merge', prompt: req.prompt, repositoryDir: req.repositoryDir });
       if (opts.failMerge) throw new AppError('MODEL_BAD_JSON');
       const keys = [...req.prompt.matchAll(/^(c\d+\.n\d+) /gm)].map((x) => x[1] ?? '');
       const output: MergeOutput = {
@@ -124,6 +124,7 @@ const input = (over: Partial<PipelineInput> = {}): PipelineInput => ({
   diff,
   settings: { maxNotes: 8, model: null, reviewTimeoutSec: 60 },
   sandboxDir: '/tmp',
+  repositoryDir: '/repo',
   signal: new AbortController().signal,
   onProgress: () => undefined,
   limit: createLimiter(2),
@@ -150,7 +151,9 @@ describe('runReviewPipeline', () => {
     const reviews = calls.filter((c) => c.kind === 'review');
     expect(reviews.length).toBeGreaterThan(1);
     expect(reviews[0]?.prompt).toContain('other-chunk');
+    expect(reviews.every((r) => r.repositoryDir === '/repo')).toBe(true);
     expect(calls.at(-1)?.kind).toBe('merge');
+    expect(calls.at(-1)?.repositoryDir).toBeUndefined();
     expect(a).toMatchObject({ chunks: reviews.length, merge: 'model', summary: 'merged' });
     expect(a.notes.map((n) => n.title)).toEqual(['combined']);
     expect(a.dropped.map((d) => d.reason)).toContain('merge cited no known candidate');
