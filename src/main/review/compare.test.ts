@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -125,6 +125,32 @@ describe('git', () => {
     await expect(git.directDiff({ owner: 'o', repo: 'r' }, A, B)).rejects.toMatchObject({
       code: 'BIN_NOT_FOUND',
     });
+  });
+
+  it('reuses a matching worktree without fetching the repository again', async () => {
+    const calls: ExecRequest[] = [];
+    const exec: Exec = async (r) => {
+      calls.push(r);
+      if (r.args.includes('add')) await mkdir(r.args.at(-2)!, { recursive: true });
+      return {
+        stdout: r.args.includes('rev-parse') ? `${B}\n` : '',
+        stderr: '',
+        code: 0,
+      };
+    };
+    const tc: ToolchainService = {
+      get: async () => ({ gh: '/gh', claude: null, git: '/git', path: '/usr/bin' }),
+      reset: () => undefined,
+    };
+    const dir = await mkdtemp(join(tmpdir(), 'pr-lens-git-wt-'));
+    const git = createGit(exec, tc, { repos: join(dir, 'git'), worktrees: join(dir, 'wt') });
+
+    const first = await git.worktree({ owner: 'o', repo: 'r' }, B, 'o__r__pr1__bbbbbbb');
+    const second = await git.worktree({ owner: 'o', repo: 'r' }, B, 'o__r__pr1__bbbbbbb');
+
+    expect(second).toBe(first);
+    expect(calls.filter((c) => c.args.includes('fetch'))).toHaveLength(1);
+    expect(calls.filter((c) => c.args.includes('add'))).toHaveLength(1);
   });
 });
 

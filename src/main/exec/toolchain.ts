@@ -70,7 +70,7 @@ export function ghEnv(tc: Toolchain): NodeJS.ProcessEnv {
   return env;
 }
 
-/** git for the two-dot fetch: never prompt; gh (as credential helper) needs its own env too. */
+/** git repository fetches: never prompt; gh (as credential helper) needs its own env too. */
 export function gitEnv(tc: Toolchain): NodeJS.ProcessEnv {
   return { ...ghEnv(tc), GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' };
 }

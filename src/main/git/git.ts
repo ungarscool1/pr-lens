@@ -14,7 +14,8 @@ export interface GitService {
    */
   directDiff(repo: RepoRef, baseSha: string, headSha: string): Promise<string>;
   /**
-   * A detached checkout of `sha` named `name` under the worktrees dir, created or reused.
+   * A detached checkout of `sha` named `name` under the worktrees dir, created or reused by
+   * automatic reviews, deep dives and language servers.
    * The least recently used ones beyond the limit are removed.
    */
   worktree(repo: RepoRef, sha: string, name: string): Promise<string>;
@@ -44,7 +45,7 @@ export interface TreeEntry {
 export interface GitDirs {
   /** Bare cache repos, one per GitHub repo. */
   repos: string;
-  /** Detached worktrees for deep dives. */
+  /** Detached worktrees for repository-aware features. */
   worktrees: string;
 }
 
@@ -312,7 +313,7 @@ export function createGit(exec: Exec, toolchain: ToolchainService, dirs: GitDirs
         }
         await rm(path, { recursive: true, force: true });
       }
-      return withRepo(repo, [sha], 'Ask Claude', async ({ run, bare, cred }) => {
+      return withRepo(repo, [sha], 'Repository context', async ({ run, bare, cred }) => {
         await mkdir(dirs.worktrees, { recursive: true, mode: 0o700 });
         await run(['-C', bare, 'worktree', 'prune'], 30_000);
         // Checkout pulls the blobs of this one tree from the promisor remote.

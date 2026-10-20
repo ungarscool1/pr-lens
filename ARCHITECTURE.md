@@ -39,8 +39,8 @@ renderer can match events that arrive before `review:start` has replied.
   override either binary.
 - `src/main/exec/toolchain.ts` builds the child environments from allow-lists. `claude` gets
   `PATH`, `HOME`, locale vars and, if set, `CLAUDE_CODE_OAUTH_TOKEN`; nothing else.
-- `src/main/git/git.ts` is used for direct (two-dot) compares of diverged refs (GitHub's
-  compare API has no two-dot diff), deep-dive worktrees, the impact map's snapshot reads and expanded diff context.
+- `src/main/git/git.ts` is used for automatic-review and deep-dive worktrees, direct (two-dot)
+  compares of diverged refs (GitHub's compare API has no two-dot diff), the impact map's snapshot reads and expanded diff context.
   It keeps a bare cache repo per GitHub repo, fetches just the needed SHAs
   (`--depth=1 --filter=blob:none`), and `git diff`s them; git fetches the blobs it needs on
   demand. Credentials come from `gh auth git-credential`, never a prompt
@@ -121,9 +121,13 @@ path, then resolved to SHAs with `gh api repos/…/commits/<ref>`.
    `other-chunk`, `noise:…`), the chunk's diff with line IDs, and the task (6 notes per chunk,
    or the note cap for a single pass). It records which IDs it showed. `secrets.ts` masks
    likely secrets first and reports them.
-4. `claude.ts` runs `claude -p --output-format json --json-schema <schema>` with `--tools ""`,
-   `--strict-mcp-config`, `--setting-sources ""`, `--permission-mode dontAsk`,
-   `--no-session-persistence`, from an empty sandbox dir, prompt on stdin. JSON Schemas are
+4. On a cache miss, `service.ts` asks the shared blobless git cache for a detached worktree at
+   the head SHA. The depth-1 cache is shared per repository; the worktree name is shared with
+   deep dives and reused while its HEAD matches. `claude.ts` runs review passes from an empty
+   sandbox dir and adds that worktree as an extra directory, with only `Read`, `Glob` and `Grep`.
+   It runs `claude -p --output-format json --json-schema <schema>` with `--strict-mcp-config`,
+   `--setting-sources ""`, `--permission-mode dontAsk`, `--no-session-persistence`, prompt on
+   stdin. Merge and release passes still get no tools. JSON Schemas are
    generated from the zod `ModelOutput` / `MergeOutput` in `src/shared/review.ts`, and the
    envelope is parsed with the same zod type. One retry on bad JSON.
 5. `validate.ts` checks each chunk's notes against the IDs that chunk was shown: normalizes

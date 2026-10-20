@@ -10,9 +10,9 @@ import type { NotesService } from '../notes/notes';
 import { resolveNote } from '../notes/resolve';
 import type { AnalysisCache } from '../review/cache';
 import type { ReviewService } from '../review/service';
-import { repoOf } from '../../shared/subject';
+import { repoOf, worktreeName } from '../../shared/subject';
 import type { SettingsService } from '../settings/settings';
-import { contextMarkdown, firstMessage, launchScript, worktreeName } from './session';
+import { contextMarkdown, firstMessage, launchScript } from './session';
 import { pruneDirectories } from '../storage/prune';
 
 export const SESSION_MAX_ENTRIES = 30;
@@ -75,7 +75,10 @@ export function createDeepDive(d: Deps): DeepDiveService {
             () => false,
           ),
       }).catch((err) =>
-        console.warn('[sessions] could not prune:', err instanceof Error ? err.name : 'unknown error'),
+        console.warn(
+          '[sessions] could not prune:',
+          err instanceof Error ? err.name : 'unknown error',
+        ),
       );
       const sessionDir = join(d.sessionsDir, `${Date.now()}-${randomBytes(4).toString('hex')}`);
       await mkdir(sessionDir, { recursive: true, mode: 0o700 });

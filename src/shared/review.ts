@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { SerializedError } from './errors';
 
-export const PROMPT_VERSION = 'review.v1';
+export const PROMPT_VERSION = 'review.v2';
 
 export const Severity = z.enum(['high', 'medium', 'low']);
 export type Severity = z.infer<typeof Severity>;

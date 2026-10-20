@@ -67,6 +67,16 @@ describe('reviewArgs', () => {
     expect(args).toContain('--no-session-persistence');
     expect(reviewArgs('sys', 'opus').at(-1)).toBe('--model=opus');
   });
+
+  it('allows only read and search tools when a repository snapshot is attached', () => {
+    const args = reviewArgs('sys', null, undefined, '/worktrees/acme');
+    const after = (flag: string) => args[args.indexOf(flag) + 1];
+    expect(after('--tools')).toBe('Read,Glob,Grep');
+    expect(args).toContain('--add-dir=/worktrees/acme');
+    expect(args).not.toContain('Bash');
+    expect(args).not.toContain('Write');
+    expect(after('--setting-sources')).toBe('');
+  });
 });
 
 describe('ClaudeClient.review', () => {

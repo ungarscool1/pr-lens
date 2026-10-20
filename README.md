@@ -14,7 +14,7 @@ and what is not built.
 - Node.js 20+ and [pnpm](https://pnpm.io) 10+
 - [GitHub CLI](https://cli.github.com) (`gh`)
 - [Claude Code](https://code.claude.com) (`claude`)
-- `git`, for **Ask Claude** worktrees and direct (two-dot) compares of diverged refs. macOS ships it with the Command
+- `git`, for repository-aware reviews, **Ask Claude** worktrees and direct (two-dot) compares of diverged refs. macOS ships it with the Command
   Line Tools (`xcode-select --install`); `brew install git` works too. No Xcode needed.
 - Optional, for the **Impact** map of Go or Python changes: your own `gopls` or
   `pyright-langserver` / `basedpyright-langserver`, with its path set in Settings. TypeScript and
@@ -51,6 +51,11 @@ pnpm dev
 Paste a PR link (`https://github.com/owner/repo/pull/123`) or `owner/repo#123` into the field at
 the top and press Enter. PRs under the auto-run budget (60k input tokens by default) are
 reviewed straight away; bigger ones wait for **Run review**.
+
+Before a new review, PR Lens fetches the head into one shallow, blobless cache repository per
+GitHub repository and creates a detached worktree. Review passes can read and search that snapshot
+to check callers, contracts and tests, but have no shell or write tools. The worktree is reused by
+later review passes and **Ask Claude**; only the 10 most recently used worktrees are retained.
 
 If the header shows a service issue, open **Settings**:
 the health check says what is missing, and you can point PR Lens at `gh` / `claude` explicitly.
@@ -150,13 +155,15 @@ In `pnpm dev`, `PR_LENS_CHUNK_BUDGET=30000` does the same for the app (ignored i
 
 - `gh` calls to GitHub, with your `gh` login. Read-only unless you turn on Promote to comment:
   `gh pr view`, `gh pr diff`, `gh issue view`, and `gh api` for Inbox, compares, commits and ref search.
-- Direct compares of diverged refs fetch just the two commits with `git` (shallow, file
-  contents on demand) into the user-data directory, authenticated through `gh`.
+- Reviews and direct compares fetch only the required commits with `git` (depth 1, no tags, blobless
+  until a checkout or diff needs file contents) into one cache per repository, authenticated
+  through `gh`. Detached head worktrees are reused across review passes and **Ask Claude**.
 - One `claude -p` call per review with the PR title, description, linked issues and the diff of
   non-noise files. PRs over about 90k input tokens are split into up to 8 chunks, reviewed two
-  at a time, plus one merge call over the resulting notes. A release summary is one more call
+  at a time, plus one merge call over the resulting notes. Review passes may read and search the
+  detached head snapshot; they have no shell or write tools. A release summary is one more call
   with the commit subjects, the file list and the review's note titles (no diff). Likely secrets are masked first and listed in the sidebar. The call runs with
-  no tools, no MCP servers, no settings files and an allow-listed environment
+  no MCP servers, no repository settings files and an allow-listed environment
   (`ANTHROPIC_API_KEY` and GitHub tokens are never passed).
 
 Reviews, private notes and seen/dismissed state are stored as JSON under the app's user-data
