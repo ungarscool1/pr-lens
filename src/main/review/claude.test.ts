@@ -63,6 +63,7 @@ describe('reviewArgs', () => {
     expect(after('--tools')).toBe('');
     expect(after('--setting-sources')).toBe('');
     expect(after('--permission-mode')).toBe('dontAsk');
+    expect(after('--max-turns')).toBe('10');
     expect(args).toContain('--strict-mcp-config');
     expect(args).toContain('--no-session-persistence');
     expect(reviewArgs('sys', 'opus').at(-1)).toBe('--model=opus');
