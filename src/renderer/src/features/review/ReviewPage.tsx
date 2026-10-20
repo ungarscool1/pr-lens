@@ -152,6 +152,7 @@ export function ReviewPage({
   }
   return (
     <LoadedReview
+      key={load.open.target.key}
       open={load.open}
       review={review}
       active={active}
@@ -514,6 +515,9 @@ function LoadedReview({
                 prRef={open.target.subject.ref}
                 meta={open.header.meta}
                 canSubmitReview={promoteEnabled}
+                refreshing={review.refreshing}
+                refreshDisabled={review.refreshing || review.job !== null}
+                onRefresh={review.refreshPr}
                 onSubmitReview={(event) => {
                   setReviewSubmitError(null);
                   setReviewSubmit(event);

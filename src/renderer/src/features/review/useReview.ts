@@ -30,12 +30,15 @@ export interface ReviewState {
   jobError: { kind: Job['kind']; message: string } | null;
   notes: NotesFile;
   notice: string | null;
+  /** Fetching the latest PR metadata/diff before starting a forced review. */
+  refreshing: boolean;
   clearNotice(): void;
   notify(message: string): void;
   /** Applies note state main already saved (e.g. promoted), without another write. */
   setLocalNoteState(id: string, patch: NoteState): void;
   runReview(force: boolean): void;
   runRelease(force: boolean): void;
+  refreshPr(): void;
   cancelReview(): void;
   addNote(at: ComposerAt, path: string, body: string): Promise<boolean>;
   deleteNote(id: string): void;
@@ -54,6 +57,10 @@ const compareInput = ({ owner, repo, base, head, mode }: CompareInput): CompareI
 });
 
 export function useReview(source: Source, autoRunMaxTokens: number): ReviewState {
+  // The page is keyed by its source, so these remain fixed for this hook instance. Changing the
+  // auto-run budget in Settings must not reload the page.
+  const [src] = useState(source);
+  const [autoRunBudget] = useState(autoRunMaxTokens);
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [cache, setCache] = useState<CacheInfo | null>(null);
@@ -62,12 +69,21 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
   const [jobError, setJobError] = useState<ReviewState['jobError']>(null);
   const [notes, setNotes] = useState<NotesFile>(EMPTY_NOTES);
   const [notice, setNotice] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshRequest, setRefreshRequest] = useState<{ targetKey: string } | null>(null);
   const targetKey = load.status === 'ready' ? load.open.target.key : null;
   const subject = load.status === 'ready' ? load.open.target.subject : null;
   const jobRef = useRef<Job | null>(null);
+  const liveRef = useRef(true);
   useEffect(() => {
     jobRef.current = job;
   }, [job]);
+  useEffect(
+    () => () => {
+      liveRef.current = false;
+    },
+    [],
+  );
 
   const startJob = useCallback((key: string, force: boolean, kind: Job['kind']) => {
     setJobError(null);
@@ -93,10 +109,30 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     [targetKey, startJob],
   );
 
-  // The page is keyed by its source, so this runs once with fresh state. Source and auto-run
-  // budget are read once at mount: changing the budget in Settings must not reload the page.
-  const [src] = useState(source);
-  const [autoRunBudget] = useState(autoRunMaxTokens);
+  const refreshPr = useCallback(() => {
+    if (src.kind !== 'pr' || refreshing || jobRef.current) return;
+    setRefreshing(true);
+    setJobError(null);
+    setNotice(null);
+    run(api.github.openPr({ input: src.input }))
+      .then((open) => {
+        if (!liveRef.current) return;
+        setAnalysis(open.analysis);
+        setCache(open.cache);
+        setRelease(open.release);
+        setLoad({ status: 'ready', open });
+        // The effect below starts the job only after the new target and its event listener render.
+        setRefreshRequest({ targetKey: open.target.key });
+      })
+      .catch((e: unknown) => {
+        if (liveRef.current) setNotice(`Could not refresh the pull request: ${errorMessage(e)}`);
+      })
+      .finally(() => {
+        if (liveRef.current) setRefreshing(false);
+      });
+  }, [src, refreshing]);
+
+  // This runs once with fresh state for the fixed source above.
   useEffect(() => {
     let live = true;
     (async () => {
@@ -156,6 +192,17 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
       }
     });
   }, [targetKey]);
+
+  useEffect(() => {
+    if (refreshRequest?.targetKey !== targetKey || !targetKey) return;
+    let live = true;
+    queueMicrotask(() => {
+      if (live) startJob(targetKey, true, 'review');
+    });
+    return () => {
+      live = false;
+    };
+  }, [refreshRequest, targetKey, startJob]);
 
   const cancelReview = useCallback(() => {
     const id = jobRef.current?.id;
@@ -225,11 +272,13 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     jobError,
     notes,
     notice,
+    refreshing,
     clearNotice,
     notify,
     setLocalNoteState,
     runReview,
     runRelease,
+    refreshPr,
     cancelReview,
     addNote,
     deleteNote,

@@ -861,6 +861,12 @@
   .crumbs .link {
     margin-left: auto;
   }
+  .crumbs .crumb-refresh {
+    margin-left: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
   .link {
     background: none;
     border: 0;
@@ -871,6 +877,10 @@
   }
   .link:hover {
     color: var(--a9);
+  }
+  .link:disabled {
+    cursor: not-allowed;
+    color: var(--n5);
   }
   .pr-title {
     font-size: 34px;
