@@ -82,7 +82,7 @@ export function reviewArgs(
     'dontAsk',
     '--no-session-persistence',
     '--max-turns',
-    '3',
+    '10',
     ...(model ? [`--model=${model}`] : []),
   ];
 }
