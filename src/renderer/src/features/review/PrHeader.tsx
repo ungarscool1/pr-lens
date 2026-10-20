@@ -12,6 +12,9 @@ interface Props {
   /** The summary card. */
   children: ReactNode;
   canSubmitReview: boolean;
+  refreshing: boolean;
+  refreshDisabled: boolean;
+  onRefresh: () => void;
   onSubmitReview: (event: ReviewDecision) => void;
 }
 
@@ -23,7 +26,16 @@ const repoOfIssue = (url: string, fallback: PrRef): { owner: string; repo: strin
   return match?.[1] && match[2] ? { owner: match[1], repo: match[2] } : fallback;
 };
 
-export function PrHeader({ prRef: ref, meta, children, canSubmitReview, onSubmitReview }: Props) {
+export function PrHeader({
+  prRef: ref,
+  meta,
+  children,
+  canSubmitReview,
+  refreshing,
+  refreshDisabled,
+  onRefresh,
+  onSubmitReview,
+}: Props) {
   const [showDesc, setShowDesc] = useState(false);
   // Relative links in a description point into the repository at the reviewed commit.
   const base = `https://github.com/${ref.owner}/${ref.repo}/blob/${meta.headSha}/`;
@@ -38,6 +50,15 @@ export function PrHeader({ prRef: ref, meta, children, canSubmitReview, onSubmit
         <span>#{ref.number}</span>
         <button className="link" onClick={() => openExternal(meta.url)}>
           Open on GitHub ↗
+        </button>
+        <button
+          className="link crumb-refresh"
+          disabled={refreshDisabled}
+          title="Fetch the latest PR branch and run a fresh review"
+          onClick={onRefresh}
+        >
+          <Icon name="refresh" />
+          {refreshing ? 'Refreshing…' : 'Refresh PR'}
         </button>
       </nav>
       <h1 className="pr-title">
