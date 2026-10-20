@@ -143,9 +143,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
   if (state.kind === 'loading' || state.targetKey !== targetKey)
     return (
       <section className="impact-page">
-        <p className="impact-loading">
-          Building the call graph with the TypeScript language service…
-        </p>
+        <p className="impact-loading">Building the impact map…</p>
       </section>
     );
   if (state.kind === 'error') {
