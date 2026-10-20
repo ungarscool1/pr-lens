@@ -129,6 +129,10 @@ pnpm typecheck
 chunk planning, note validation and repair, merge and ranking, secret redaction, CLI envelope
 parsing, binary resolution) and the review pipeline against a fake `claude`.
 
+The Unit tests GitHub Actions workflow runs `pnpm test` on Ubuntu with Node.js 22
+and pnpm 10 for pull requests and pushes to `main`. It can also be run manually.
+Live tests remain opt-in and are skipped in this workflow.
+
 A live smoke test runs the real pipeline (`gh` + `claude`, no window) and costs real tokens,
 so it is skipped unless asked for. `PR_LENS_LIVE_BUDGET` lowers the chunk budget to force
 chunking on a mid-size PR:
