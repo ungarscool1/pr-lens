@@ -158,11 +158,11 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
   const { map } = state;
   const changed = map.nodes.filter((node) => node.changed).length;
   return (
-    <section className="impact-page" aria-label="Function impact map">
+    <section className="impact-page" aria-label="Code impact map">
       <header className="impact-head">
         <div>
-          <span className="card-kicker">Call hierarchy</span>
-          <h2>Function impact</h2>
+          <span className="card-kicker">Dependency graph</span>
+          <h2>Code impact</h2>
           <p>
             {changed} changed · {map.nodes.length - changed} connected · {map.scannedFiles} source
             files scanned
@@ -200,7 +200,7 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
       )}
       {!changed ? (
         <p className="impact-empty">
-          No changed functions were found in the languages mapped for this diff.
+          No changed functions or blocks were found in the languages mapped for this diff.
         </p>
       ) : (
         <ImpactGraph map={map} diffPaths={diffPaths} onOpen={onOpenNode} />
@@ -254,10 +254,10 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
         </section>
       </div>
       <p className="impact-disclaimer">
-        Built locally from the head commit with each language's call hierarchy, the same one an
-        editor shows: TypeScript's built in, others from the language servers set in Settings. Calls
-        the language service cannot resolve, or into code outside this repository, are not drawn
-        rather than guessed.
+        Built locally from the head commit. Code uses each language's call hierarchy—the same one an
+        editor shows—and Terraform uses static block references. Remote state is represented by its
+        local data source; its backend and other repositories are never read. Dependencies that
+        cannot be resolved inside this repository are not drawn rather than guessed.
       </p>
     </section>
   );

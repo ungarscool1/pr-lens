@@ -210,8 +210,8 @@ end of the file has its own row. Added, deleted and binary files have nothing hi
 
 ### Function impact map
 
-The Review toolbar has an **Impact** mode: a call graph of the changed functions, their direct
-callers and their direct callees. It is built locally and deterministically, with no model.
+The Review toolbar has an **Impact** mode: a dependency graph of changed functions or Terraform
+blocks and their direct neighbours. It is built locally and deterministically, with no model.
 
 1. `src/main/impact/service.ts` lists the head commit's tree in the bare cache repo
    (`git.treeEntries`) and picks up to 1,200 TypeScript/JavaScript files: changed files first,
@@ -237,6 +237,17 @@ callers and their direct callees. It is built locally and deterministically, wit
    under HTML buttons. Clicking a changed function switches to Diff mode and centres its first
    changed line; a function elsewhere in the diff goes to its lines, revealing them when they
    sit between hunks; one outside the diff opens on GitHub at the head SHA.
+
+#### Terraform (`src/main/impact/terraform.ts`)
+
+Terraform is mapped from the same bounded, in-memory head snapshot, without running Terraform or
+a language server. A small HCL lexer identifies top-level resource, data, module, output, variable,
+provider, check, terraform and locals blocks, then connects blocks through traversals in the same
+Terraform module directory. Changed blocks and their direct dependencies and dependants are drawn.
+
+`data "terraform_remote_state"` blocks are local graph nodes, so code that reads their outputs is
+connected to the data source. PR Lens never reads the state backend and never fetches another
+repository; the upstream state remains deliberately outside the graph.
 
 #### Other languages: the user's own language servers (`src/main/impact/lsp`)
 

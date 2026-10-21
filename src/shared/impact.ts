@@ -1,9 +1,8 @@
 import { z } from 'zod';
 
 /**
- * A function-level call graph around the changed code, built locally from a language service's
- * call hierarchy (what an editor's LSP shows): TypeScript's built in, others from a language
- * server the user installed. No model is involved.
+ * A dependency graph around changed code, built locally from language-service call hierarchies
+ * or Terraform block references. No model is involved.
  */
 export const ImpactNode = z.object({
   /** `<path>#<offset of the declaration name>`: unique and stable for one head SHA. */
@@ -47,7 +46,7 @@ export const ImpactTest = z.object({
 export type ImpactTest = z.infer<typeof ImpactTest>;
 
 export const ImpactLanguage = z.object({
-  /** `typescript`, or an LSP language id. */
+  /** A built-in analyzer (`typescript`, `terraform`) or an LSP language id. */
   language: z.string(),
   label: z.string(),
   /** `off`: changed files in this language, but no language server is set up for it. */
@@ -57,7 +56,7 @@ export const ImpactLanguage = z.object({
 export type ImpactLanguage = z.infer<typeof ImpactLanguage>;
 
 export const ImpactMap = z.object({
-  /** Changed functions and their direct callers and callees. */
+  /** Changed functions/blocks and their direct dependants and dependencies. */
   nodes: z.array(ImpactNode),
   edges: z.array(ImpactEdge),
   /** Imports made by files that contain a changed function. */

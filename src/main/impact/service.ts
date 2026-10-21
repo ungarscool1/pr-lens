@@ -19,6 +19,7 @@ import {
   isImpactSource,
   isTestPath,
 } from './changes';
+import { analyzeTerraformImpact, isTerraformSource } from './terraform';
 
 const MAX_CANDIDATE_FILES = 1_200;
 
@@ -45,7 +46,8 @@ interface Deps {
   };
 }
 
-const isMappable = (path: string): boolean => isImpactSource(path) || lspLanguageOf(path) !== null;
+const isMappable = (path: string): boolean =>
+  isImpactSource(path) || isTerraformSource(path) || lspLanguageOf(path) !== null;
 
 /** A stored map is reused only by the same analyzers and servers for the same changed lines. */
 export function impactKey(
@@ -145,17 +147,36 @@ export function createImpactService({ git, review, cache, analyze, servers }: De
     });
   };
 
+  const terraform = async (
+    repo: RepoRef,
+    headSha: string,
+    diff: DiffModel,
+    tree: TreeEntry[],
+  ): Promise<ImpactMap> => {
+    const candidates = prioritize(
+      tree.filter((entry) => isTerraformSource(entry.path)),
+      new Set(changedLines(diff, isTerraformSource).keys()),
+    ).slice(0, MAX_CANDIDATE_FILES);
+    const sources = await git.sourceFiles(repo, headSha, candidates);
+    return analyzeTerraformImpact({
+      sources,
+      diff,
+      skippedFiles: tree.filter((entry) => isTerraformSource(entry.path)).length - sources.length,
+    });
+  };
+
   const load = async (targetKey: string): Promise<ImpactMap> => {
     const loaded = review.loaded(targetKey);
     if (!loaded) throw new AppError('BAD_INPUT', 'Open it again before building an impact map.');
     const { subject, headSha } = loaded.target;
     const { diff } = loaded;
     const tsChanged = changedLines(diff).size > 0;
+    const terraformChanged = changedLines(diff, isTerraformSource).size > 0;
     const lspChanged = LspLanguage.options.filter(
       (language) =>
         changedLines(diff, (path) => LSP_LANGUAGES[language].extensions.test(path)).size > 0,
     );
-    if (!tsChanged && !lspChanged.length) return EMPTY;
+    if (!tsChanged && !terraformChanged && !lspChanged.length) return EMPTY;
     const paths = servers.paths();
     const key = impactKey(diff, paths);
     const stored = await cache.getImpact(subject, headSha, key);
@@ -170,6 +191,15 @@ export function createImpactService({ git, review, cache, analyze, servers }: De
       languages.push({
         language: 'typescript',
         label: 'TypeScript / JavaScript',
+        status: 'mapped',
+        detail: 'built in',
+      });
+    }
+    if (terraformChanged) {
+      parts.push(await terraform(repo, headSha, diff, tree));
+      languages.push({
+        language: 'terraform',
+        label: 'Terraform',
         status: 'mapped',
         detail: 'built in',
       });

@@ -3,7 +3,7 @@ import type { DiffModel } from '../../shared/diff';
 // Kept apart from analysis.ts so the main process can use these without loading the compiler.
 
 /** Bump when the analysis changes what it finds; persisted maps from older versions are a miss. */
-export const ANALYZER_VERSION = 3;
+export const ANALYZER_VERSION = 4;
 
 /** Changed declarations expanded into the graph; the rest are counted, not drawn. */
 export const MAX_CHANGED_FUNCTIONS = 60;
