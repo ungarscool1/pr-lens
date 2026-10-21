@@ -3,7 +3,7 @@ import type { DiffModel } from '../../shared/diff';
 // Kept apart from analysis.ts so the main process can use these without loading the compiler.
 
 /** Bump when the analysis changes what it finds; persisted maps from older versions are a miss. */
-export const ANALYZER_VERSION = 4;
+export const ANALYZER_VERSION = 5;
 
 /** Changed declarations expanded into the graph; the rest are counted, not drawn. */
 export const MAX_CHANGED_FUNCTIONS = 60;
@@ -18,6 +18,11 @@ export const isImpactSource = (path: string): boolean =>
 export const isTestPath = (path: string): boolean => TEST_FILE.test(path);
 export const isConfigPath = (path: string): boolean =>
   /^(?:tsconfig(?:\.[\w-]+)?|jsconfig)\.json$/.test(path);
+
+export const isWorkflowPath = (path: string): boolean =>
+  /^\.github\/workflows\/[^/]+\.ya?ml$/.test(path);
+export const isGitHubActionsPath = (path: string): boolean =>
+  isWorkflowPath(path) || /(?:^|\/)action\.ya?ml$/.test(path);
 
 export interface ChangedLine {
   /** Line in the new file; a deletion sits on the line that now follows it. */
