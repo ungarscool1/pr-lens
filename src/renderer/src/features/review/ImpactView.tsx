@@ -202,7 +202,8 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
       )}
       {!changed ? (
         <p className="impact-empty">
-          No changed functions, workflows or actions were found in the files mapped for this diff.
+          No changed functions, blocks, workflows or actions were found in the files mapped for this
+          diff.
         </p>
       ) : (
         <ImpactGraph map={map} diffPaths={diffPaths} onOpen={onOpenNode} />
@@ -256,10 +257,12 @@ export function ImpactView({ targetKey, diffPaths, onJumpPath, onOpenNode }: Pro
         </section>
       </div>
       <p className="impact-disclaimer">
-        Built locally from the head commit using language call hierarchies and local GitHub Actions
-        uses references. TypeScript and GitHub Actions are built in; other languages use the servers
-        set in Settings. Workflows and actions are mapped as whole files. Unresolved calls and
-        external actions are omitted.
+        Built locally from the head commit using language call hierarchies, Terraform block
+        references and local GitHub Actions uses references. TypeScript, Terraform and GitHub
+        Actions are built in; other languages use the servers set in Settings. Workflows and actions
+        are mapped as whole files. Terraform remote state is represented by its local data source;
+        its backend and other repositories are never read. Unresolved dependencies and external
+        actions are omitted.
       </p>
     </section>
   );

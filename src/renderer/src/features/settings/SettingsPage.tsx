@@ -240,9 +240,9 @@ export function SettingsPage({ settings, health, onSettings, onRecheck }: Props)
       <Blueprint as="section" className="settings-card" aria-labelledby="servers-h">
         <h2 id="servers-h">Impact map language servers</h2>
         <p className="settings-help">
-          TypeScript and JavaScript are mapped built in. For other languages, point PR Lens at a
-          language server you installed; leave a path empty to skip that language. PR Lens never
-          installs, downloads or searches for one. It runs exactly the binary named here, on a
+          TypeScript, JavaScript and Terraform are mapped built in. For other languages, point PR
+          Lens at a language server you installed; leave a path empty to skip that language. PR Lens
+          never installs, downloads or searches for one. It runs exactly the binary named here, on a
           checkout of the PR head with every file made non-executable, and with settings that keep
           the server from fetching code (for Go: <code>GOTOOLCHAIN=local</code>,{' '}
           <code>GOPROXY=off</code>, <code>CGO_ENABLED=0</code>).

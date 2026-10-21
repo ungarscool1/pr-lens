@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 /**
- * A call graph around changed functions, workflows and internal actions, built locally from
- * language call hierarchies and GitHub Actions `uses` references. No model is involved.
+ * A dependency graph around changed code, built locally from language-service call hierarchies
+ * and Terraform block or GitHub Actions `uses` references. No model is involved.
  */
 export const ImpactNode = z.object({
   /** `<path>#<declaration offset>`; whole-file workflow/action nodes use offset 0. */
@@ -46,7 +46,7 @@ export const ImpactTest = z.object({
 export type ImpactTest = z.infer<typeof ImpactTest>;
 
 export const ImpactLanguage = z.object({
-  /** `typescript`, `github-actions`, or an LSP language id. */
+  /** A built-in analyzer (`typescript`, `terraform`, `github-actions`) or an LSP language id. */
   language: z.string(),
   label: z.string(),
   /** `off`: changed files in this language, but no language server is set up for it. */
@@ -56,7 +56,7 @@ export const ImpactLanguage = z.object({
 export type ImpactLanguage = z.infer<typeof ImpactLanguage>;
 
 export const ImpactMap = z.object({
-  /** Changed declarations/files and their direct callers and callees. */
+  /** Changed declarations/files and their direct dependants and dependencies. */
   nodes: z.array(ImpactNode),
   edges: z.array(ImpactEdge),
   /** Imports made by files that contain a changed function. */

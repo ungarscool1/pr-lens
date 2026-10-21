@@ -210,8 +210,8 @@ end of the file has its own row. Added, deleted and binary files have nothing hi
 
 ### Impact map
 
-The Review toolbar has an **Impact** mode: a call graph of the changed functions, their direct
-callers and their direct callees, plus workflows and internal GitHub Actions. It is built locally
+The Review toolbar has an **Impact** mode: a dependency graph of changed functions, Terraform
+blocks, workflows and internal GitHub Actions and their direct neighbours. It is built locally
 and deterministically, with no model.
 
 1. `src/main/impact/service.ts` lists the head commit's tree in the bare cache repo
@@ -253,6 +253,17 @@ inside composites. Only definitions present in the snapshot resolve; remote acti
 images, dynamic references and missing targets are omitted. The graph includes up to 60 changed
 definitions and their direct callers/callees, anchors changes to their first changed diff line,
 and merges with the language maps. GitHub Actions changed lines also participate in the cache key.
+
+#### Terraform (`src/main/impact/terraform.ts`)
+
+Terraform is mapped from the same bounded, in-memory head snapshot, without running Terraform or
+a language server. A small HCL lexer identifies top-level resource, data, module, output, variable,
+provider, check, terraform and locals blocks, then connects blocks through traversals in the same
+Terraform module directory. Changed blocks and their direct dependencies and dependants are drawn.
+
+`data "terraform_remote_state"` blocks are local graph nodes, so code that reads their outputs is
+connected to the data source. PR Lens never reads the state backend and never fetches another
+repository; the upstream state remains deliberately outside the graph.
 
 #### Other languages: the user's own language servers (`src/main/impact/lsp`)
 
