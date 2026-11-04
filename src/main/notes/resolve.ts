@@ -15,11 +15,8 @@ export interface ResolvedNote {
   label: string;
   /** AI title, or the first line of a private note. */
   title: string;
-  /** For AI notes, the user's edited body when there is one. */
   body: string;
-  /** The AI note's body was replaced by the user. */
   edited?: true;
-  /** The note's comment in the viewer's pending GitHub review, if it was linked. */
   published?: PublishedLink;
   question?: string;
   path: string;
