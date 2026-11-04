@@ -14,13 +14,9 @@ export interface NotesService {
   ): Promise<PrivateNote>;
   delete(subject: Subject, id: string): Promise<void>;
   patchState(subject: Subject, id: string, patch: NoteState): Promise<void>;
-  /** Replaces a private note's body. */
   updateBody(subject: Subject, id: string, body: string): Promise<void>;
-  /** Stores the user's replacement body for an AI note. */
   setEdit(subject: Subject, id: string, body: string): Promise<void>;
-  /** Links a note to its pending GitHub comment, or removes the link (null). Main only. */
   setPublished(subject: Subject, id: string, link: PublishedLink | null): Promise<void>;
-  /** Drops every link, e.g. once the pending review is submitted. */
   clearPublished(subject: Subject): Promise<void>;
 }
 
