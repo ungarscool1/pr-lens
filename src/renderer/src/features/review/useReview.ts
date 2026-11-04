@@ -36,6 +36,10 @@ export interface ReviewState {
   notify(message: string): void;
   /** Applies note state main already saved (e.g. promoted), without another write. */
   setLocalNoteState(id: string, patch: NoteState): void;
+  /** Mirrors main dropping every pending-comment link once the review is submitted. */
+  clearLocalLinks(): void;
+  /** Re-reads the notes file, e.g. after main linked a note to its new GitHub comment. */
+  reloadNotes(): void;
   runReview(force: boolean): void;
   runRelease(force: boolean): void;
   refreshPr(): void;
@@ -43,9 +47,11 @@ export interface ReviewState {
   addNote(at: ComposerAt, path: string, body: string): Promise<boolean>;
   deleteNote(id: string): void;
   patchNote(id: string, patch: NoteState): void;
+  /** Saves a note's new body (and its pending GitHub comment, if linked); false on failure. */
+  editNote(id: string, body: string): Promise<boolean>;
 }
 
-const EMPTY_NOTES: NotesFile = { mine: [], state: {} };
+const EMPTY_NOTES: NotesFile = { mine: [], state: {}, edits: {}, published: {} };
 
 // The IPC schema is strict, so only the compare fields go over the wire.
 const compareInput = ({ owner, repo, base, head, mode }: CompareInput): CompareInput => ({
@@ -255,6 +261,23 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     [subject],
   );
 
+  const editNote = useCallback(
+    async (id: string, body: string): Promise<boolean> => {
+      if (!targetKey) return false;
+      try {
+        const r = await run(api.notes.edit({ targetKey, id, body }));
+        if (!liveRef.current) return true;
+        setNotes(r.notes);
+        if (r.synced === 'local' && r.reason) setNotice(r.reason);
+        return true;
+      } catch (e) {
+        if (liveRef.current) setNotice(`Could not save the edit: ${errorMessage(e)}`);
+        return false;
+      }
+    },
+    [targetKey],
+  );
+
   const clearNotice = useCallback(() => setNotice(null), []);
   const notify = useCallback((m: string) => setNotice(m), []);
   const setLocalNoteState = useCallback(
@@ -262,6 +285,15 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
       setNotes((f) => ({ ...f, state: { ...f.state, [id]: { ...f.state[id], ...patch } } })),
     [],
   );
+  const clearLocalLinks = useCallback(() => setNotes((f) => ({ ...f, published: {} })), []);
+  const reloadNotes = useCallback(() => {
+    if (!subject) return;
+    run(api.notes.list({ subject }))
+      .then((f) => {
+        if (liveRef.current) setNotes(f);
+      })
+      .catch(() => undefined);
+  }, [subject]);
 
   return {
     load,
@@ -276,6 +308,8 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     clearNotice,
     notify,
     setLocalNoteState,
+    clearLocalLinks,
+    reloadNotes,
     runReview,
     runRelease,
     refreshPr,
@@ -283,5 +317,6 @@ export function useReview(source: Source, autoRunMaxTokens: number): ReviewState
     addNote,
     deleteNote,
     patchNote,
+    editNote,
   };
 }

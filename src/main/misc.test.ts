@@ -8,6 +8,60 @@ import { classifyGhError } from './github/gh';
 import { createLimiter } from './review/limiter';
 import { redactSecrets } from './review/secrets';
 import { isAllowedExternalUrl } from '../shared/external';
+import { contract } from '../shared/ipc';
+import { NotesFile } from '../shared/notes';
+
+describe('notes:edit input', () => {
+  const schema = contract['notes:edit'].input;
+  const ok = { targetKey: `acme/api#812@${'c'.repeat(40)}`, id: 'ai-abcd1234', body: 'x' };
+
+  it('accepts a target key, a note ID and a body', () => {
+    expect(schema.safeParse(ok).success).toBe(true);
+    expect(schema.safeParse({ ...ok, id: 'me-abcd1234', body: 'y'.repeat(65_000) }).success).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['an unknown key', { ...ok, commentId: 'PRRC_1' }],
+    ['a published link', { ...ok, published: { commentId: 'PRRC_1', body: 'x' } }],
+    ['an empty body', { ...ok, body: '' }],
+    ['an oversized body', { ...ok, body: 'y'.repeat(65_001) }],
+    ['a malformed note ID', { ...ok, id: 'xx-abcd1234' }],
+    ['a too short note ID', { ...ok, id: 'ai-ab' }],
+    ['a malformed target key', { ...ok, targetKey: 'acme/api' }],
+    ['a missing body', { targetKey: ok.targetKey, id: ok.id }],
+  ])('rejects %s', (_, input) => expect(schema.safeParse(input).success).toBe(false));
+
+  it('keeps new private notes at 10,000 characters', () => {
+    const note = {
+      subject: { kind: 'pr', ref: { owner: 'acme', repo: 'api', number: 812 } },
+      path: 'a.ts',
+      side: 'RIGHT',
+      line: 1,
+      lineId: 'F1-001',
+    };
+    const create = contract['notes:create'].input;
+    expect(create.safeParse({ ...note, body: 'y'.repeat(10_000) }).success).toBe(true);
+    expect(create.safeParse({ ...note, body: 'y'.repeat(10_001) }).success).toBe(false);
+  });
+
+  it('parses an older notes file, with edits and links defaulting to empty', () => {
+    expect(NotesFile.parse({ mine: [], state: {} })).toEqual({
+      mine: [],
+      state: {},
+      edits: {},
+      published: {},
+    });
+    expect(
+      NotesFile.safeParse({
+        mine: [],
+        state: {},
+        published: { 'ai-abcd1234': { commentId: 'bad id!', body: 'x' } },
+      }).success,
+    ).toBe(false);
+  });
+});
 
 describe('parsePrInput', () => {
   it.each([

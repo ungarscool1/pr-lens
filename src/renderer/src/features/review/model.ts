@@ -1,16 +1,24 @@
 import { canExpand } from '../../../../shared/diff';
 import type { DiffFile, DiffLine, Side } from '../../../../shared/diff';
-import type { NoteState, PrivateNote } from '../../../../shared/notes';
+import type { NoteEdit, NoteState, PrivateNote, PublishedLink } from '../../../../shared/notes';
 import type { AiNote } from '../../../../shared/review';
 import { changedRanges, markRange, tokenize } from '../../lib/highlight';
 import type { Tok } from '../../lib/highlight';
 import { gapActions, gapSize, gapsOf, shownIn } from './expand';
 import type { ExpandDir, Reveals } from './expand';
 
+/** Shown with every note: whether its body is the user's edit, and whether it is on GitHub. */
+interface EditInfo {
+  /** An AI note whose body the user replaced. */
+  edited: boolean;
+  /** Linked to the viewer's pending GitHub comment; `body` is then the posted text. */
+  linked: boolean;
+}
+
 /** AI and private notes in one shape, so the diff and sidebar treat them alike. */
 export type ViewNote =
-  | (AiNote & { lineId: string })
-  | {
+  | (AiNote & { lineId: string } & EditInfo)
+  | ({
       id: string;
       source: 'me';
       fid: string;
@@ -20,26 +28,47 @@ export type ViewNote =
       endLine: number;
       lineId: string;
       body: string;
-    };
+    } & EditInfo);
 
 export type Filter = 'all' | 'unseen' | 'high' | 'medium' | 'mine';
 export type ViewMode = 'unified' | 'split';
 
-export function toViewNotes(ai: readonly AiNote[], mine: readonly PrivateNote[]): ViewNote[] {
+/** The body shown is the posted text for a linked note, else the AI edit, else the original. */
+export function toViewNotes(
+  ai: readonly AiNote[],
+  mine: readonly PrivateNote[],
+  edits: Readonly<Record<string, NoteEdit>> = {},
+  published: Readonly<Record<string, PublishedLink>> = {},
+): ViewNote[] {
   const aiSorted = [...ai]
     .sort((a, b) => b.score - a.score)
-    .map((n) => ({ ...n, lineId: n.startLineId }));
-  const me = mine.map((n): ViewNote => ({
-    id: n.id,
-    source: 'me',
-    fid: n.lineId.split('-')[0] ?? '',
-    path: n.path,
-    side: n.side,
-    startLine: n.line,
-    endLine: n.line,
-    lineId: n.lineId,
-    body: n.body,
-  }));
+    .map((n): ViewNote => {
+      const edit = edits[n.id];
+      const link = published[n.id];
+      return {
+        ...n,
+        lineId: n.startLineId,
+        body: link?.body ?? edit?.body ?? n.body,
+        edited: !!edit,
+        linked: !!link,
+      };
+    });
+  const me = mine.map((n): ViewNote => {
+    const link = published[n.id];
+    return {
+      id: n.id,
+      source: 'me',
+      fid: n.lineId.split('-')[0] ?? '',
+      path: n.path,
+      side: n.side,
+      startLine: n.line,
+      endLine: n.line,
+      lineId: n.lineId,
+      body: link?.body ?? n.body,
+      edited: false,
+      linked: !!link,
+    };
+  });
   return [...aiSorted, ...me];
 }
 

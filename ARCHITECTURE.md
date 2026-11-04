@@ -69,8 +69,9 @@ module, which the MVP rules out.
 
 ## Promote to comment (`src/main/promote`)
 
-`write-client.ts` is the only code that can mutate GitHub, and only `promote.ts` imports it.
-Off unless `promoteEnabled` is set (default false); every call checks it.
+`write-client.ts` is the only code that can mutate GitHub, and only `promote.ts` imports it. It
+creates, extends, or edits the viewer's PENDING review. Off unless `promoteEnabled` is set
+(default false); every call that writes to GitHub checks it.
 
 1. `promote:preview` resolves the note, reads the PR through GraphQL (node ID, head, the
    viewer's own pending review), refuses if the head moved since the review, and returns the
@@ -80,11 +81,22 @@ Off unless `promoteEnabled` is set (default false); every call checks it.
    pending review if the viewer has none (`addPullRequestReview` without an `event`, and the
    result must come back `PENDING`), then adds the comment with `addPullRequestReviewThread`
    (line or multi-line, or `subjectType: FILE` for file-level notes). The note is marked
-   promoted.
+   promoted and linked to the new comment: main stores its comment ID and the posted text in
+   the notes file's `published` map, and a private note's body becomes the posted text.
 3. `promote:submitReview` checks the setting and head once more, reuses (or starts) the
    viewer's pending review and submits it as `APPROVE`, `COMMENT`, or `REQUEST_CHANGES`.
-   Every thread already staged in that pending review is submitted together. Only comments
-   explicitly promoted through step 2 ever reach GitHub; private notes and their state never do.
+   Every thread already staged in that pending review is submitted together, and every link is
+   then dropped. Only comments explicitly promoted through step 2 ever reach GitHub; private
+   notes and their state never do.
+4. `notes:edit` (handled by `promote.editNote`) edits a note's body. A note with no link is
+   saved locally only: a private note's body (up to 10,000 characters), or an AI note's entry
+   in `edits`. For a linked note, main checks the setting, then asks GitHub (`node(id)`) that
+   the comment is still `PENDING`, written by the gh viewer, `viewerCanUpdate`, and on the
+   loaded PR, and only then calls `updatePullRequestReviewComment`. If any check fails or the
+   comment is gone, the link and `promoted` are cleared and the edit is saved locally, with
+   the reason shown. Any other error (auth, network) saves nothing, so the note and its comment
+   never drift apart silently. The comment ID never comes from the renderer, and no channel
+   lets the renderer set `published`. Notes promoted before links existed are edited locally.
 
 Values go to `gh api graphql` with `-f` (raw strings, so a body starting with `@` is never
 read as a file) and `-F` only for line numbers.
@@ -163,7 +175,10 @@ per file) under `app.getPath('userData')`, each read back through a zod schema.
   most recent entries; an analysis, its release summary and its impact map are removed together.
 - **Private notes and note state** live in `notes/<subject slug>.json`: per PR, so they
   survive new pushes, and per SHA range for a compare. AI note IDs are a hash of path, category and anchor text, so
-  seen/dismissed state carries over when a re-run finds the same thing.
+  seen/dismissed state carries over when a re-run finds the same thing. The same file holds
+  `edits` (the user's replacement body for an AI note; the cached analysis is never changed, and
+  the edit survives re-runs) and `published` (a note's pending GitHub comment ID and the text
+  last posted, written by main only). Both default to empty, so older files still load.
 - **Settings** in `settings.json`; the optional Claude OAuth token in `claude-oauth.bin`,
   encrypted with `safeStorage`.
 

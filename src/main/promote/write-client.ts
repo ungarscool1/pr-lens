@@ -9,14 +9,21 @@ import { classifyGhError } from '../github/gh';
 
 /**
  * The only code that writes to GitHub. Imported by promote/ alone; the read client cannot
- * mutate. Everything here creates or extends the viewer's PENDING review, which nobody else
- * sees until they submit it on GitHub.
+ * mutate. Everything here creates, extends, or edits the viewer's PENDING review, which nobody
+ * else sees until they submit it on GitHub.
  */
 export interface GitHubWriteClient {
   reviewContext(ref: PrRef): Promise<ReviewContext>;
   /** Starts a pending review on `headSha` (no event = PENDING). */
   createPendingReview(prId: string, headSha: string): Promise<string>;
-  addThread(reviewId: string, thread: ThreadInput): Promise<{ url: string | null }>;
+  addThread(
+    reviewId: string,
+    thread: ThreadInput,
+  ): Promise<{ url: string | null; commentId: string | null }>;
+  /** A review comment's state, author and PR, as seen by the gh viewer; null if not a review comment. */
+  pendingComment(commentId: string): Promise<CommentInfo | null>;
+  /** Replaces a review comment's body. Callers check it is the viewer's PENDING comment first. */
+  updateComment(commentId: string, body: string): Promise<void>;
   /** Publishes the viewer's pending review, including every thread already staged in it. */
   submitReview(
     reviewId: string,
@@ -31,6 +38,17 @@ export interface ReviewContext {
   viewer: string;
   /** The viewer's own pending review on this PR, if any. */
   pendingReviewId: string | null;
+}
+
+export interface CommentInfo {
+  /** `PENDING` until the review that holds it is submitted. */
+  state: string;
+  author: string | null;
+  viewer: string;
+  viewerCanUpdate: boolean;
+  owner: string;
+  repo: string;
+  number: number;
 }
 
 export type ThreadInput =
@@ -79,13 +97,13 @@ const CreateJson = z.object({
 
 const ADD_LINE_THREAD = `mutation($review: ID!, $path: String!, $body: String!, $line: Int!, $side: DiffSide!, $startLine: Int, $startSide: DiffSide) {
   addPullRequestReviewThread(input: { pullRequestReviewId: $review, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide, subjectType: LINE }) {
-    thread { id comments(first: 1) { nodes { url } } }
+    thread { id comments(first: 1) { nodes { id url } } }
   }
 }`;
 
 const ADD_FILE_THREAD = `mutation($review: ID!, $path: String!, $body: String!) {
   addPullRequestReviewThread(input: { pullRequestReviewId: $review, path: $path, body: $body, subjectType: FILE }) {
-    thread { id comments(first: 1) { nodes { url } } }
+    thread { id comments(first: 1) { nodes { id url } } }
   }
 }`;
 
@@ -93,8 +111,58 @@ const ThreadJson = z.object({
   data: z.object({
     addPullRequestReviewThread: z.object({
       thread: z
-        .object({ comments: z.object({ nodes: z.array(z.object({ url: z.string() })) }) })
+        .object({
+          comments: z.object({
+            nodes: z.array(z.object({ id: z.string().optional(), url: z.string() })),
+          }),
+        })
         .nullable(),
+    }),
+  }),
+});
+
+const PENDING_COMMENT = `query($comment: ID!) {
+  viewer { login }
+  node(id: $comment) {
+    ... on PullRequestReviewComment {
+      state
+      author { login }
+      viewerCanUpdate
+      pullRequest { number repository { owner { login } name } }
+    }
+  }
+}`;
+
+const CommentJson = z.object({
+  data: z.object({
+    viewer: z.object({ login: z.string() }),
+    // Any other node type matches no fragment and comes back as `{}`.
+    node: z
+      .object({
+        state: z.string().optional(),
+        author: z.object({ login: z.string() }).nullable().optional(),
+        viewerCanUpdate: z.boolean().optional(),
+        pullRequest: z
+          .object({
+            number: z.number().int(),
+            repository: z.object({ owner: z.object({ login: z.string() }), name: z.string() }),
+          })
+          .optional(),
+      })
+      .nullable(),
+  }),
+});
+
+const UPDATE_COMMENT = `mutation($comment: ID!, $body: String!) {
+  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $comment, body: $body }) {
+    pullRequestReviewComment { id }
+  }
+}`;
+
+const UpdateJson = z.object({
+  data: z.object({
+    updatePullRequestReviewComment: z.object({
+      pullRequestReviewComment: z.object({ id: z.string() }),
     }),
   }),
 });
@@ -122,6 +190,9 @@ export function classifyWriteError(stderr: string): AppError {
       'GH_NOT_AUTHENTICATED',
       'Your gh login cannot comment on this PR. Run `gh auth refresh -s repo`, or check your access to the repository.',
     );
+  }
+  if (/could not resolve to a node/i.test(stderr)) {
+    return new AppError('NOT_FOUND', 'GitHub no longer has that comment.');
   }
   if (/one pending review/i.test(stderr)) {
     return new AppError('BAD_INPUT', 'GitHub reports a pending review already exists. Try again.');
@@ -206,8 +277,27 @@ export function createWriteClient(exec: Exec, toolchain: ToolchainService): GitH
               },
               { line: t.line, ...(t.startLine !== undefined ? { startLine: t.startLine } : {}) },
             );
-      const thread = ThreadJson.parse(raw).data.addPullRequestReviewThread.thread;
-      return { url: thread?.comments.nodes[0]?.url ?? null };
+      const first = ThreadJson.parse(raw).data.addPullRequestReviewThread.thread?.comments.nodes[0];
+      return { url: first?.url ?? null, commentId: first?.id ?? null };
+    },
+
+    async pendingComment(commentId) {
+      const d = CommentJson.parse(await graphql(PENDING_COMMENT, { comment: commentId })).data;
+      const n = d.node;
+      if (!n?.state || !n.pullRequest) return null;
+      return {
+        state: n.state,
+        author: n.author?.login ?? null,
+        viewer: d.viewer.login,
+        viewerCanUpdate: n.viewerCanUpdate ?? false,
+        owner: n.pullRequest.repository.owner.login,
+        repo: n.pullRequest.repository.name,
+        number: n.pullRequest.number,
+      };
+    },
+
+    async updateComment(commentId, body) {
+      UpdateJson.parse(await graphql(UPDATE_COMMENT, { comment: commentId, body }));
     },
 
     async submitReview(reviewId, event, body) {

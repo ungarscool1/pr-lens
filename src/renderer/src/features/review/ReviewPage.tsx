@@ -175,7 +175,7 @@ function LoadedReview({
   promoteEnabled: boolean;
   onMode: ((mode: DiffMode) => void) | undefined;
 }) {
-  const { analysis, notes: notesFile, patchNote, addNote, deleteNote } = review;
+  const { analysis, notes: notesFile, patchNote, addNote, deleteNote, editNote } = review;
   const noteState = notesFile.state;
   const [mode, setMode] = useState<ViewMode>('unified');
   const [filter, setFilter] = useState<Filter>('all');
@@ -209,8 +209,9 @@ function LoadedReview({
   const noise = files.filter((f) => f.noise !== null);
 
   const allNotes = useMemo(
-    () => toViewNotes(analysis?.notes ?? [], notesFile.mine),
-    [analysis, notesFile.mine],
+    () =>
+      toViewNotes(analysis?.notes ?? [], notesFile.mine, notesFile.edits, notesFile.published),
+    [analysis, notesFile.mine, notesFile.edits, notesFile.published],
   );
   const shown = useMemo(
     () =>
@@ -346,6 +347,10 @@ function LoadedReview({
       : promoteEnabled
         ? null
         : 'Turn on Promote to comment in Settings first';
+  // Editing a note that is in the pending review also edits the GitHub comment: same opt-in.
+  const syncBlocked = promoteEnabled
+    ? null
+    : 'This note is in your pending GitHub review. Turn on Promote to comment in Settings to edit it';
   const { setLocalNoteState } = review;
   const startPromote = useCallback(
     (noteId: string) => {
@@ -363,6 +368,8 @@ function LoadedReview({
     run(api.promote.confirm({ confirmToken: promote.preview.confirmToken, body }))
       .then(() => {
         setLocalNoteState(promote.noteId, { promoted: true });
+        // Main linked the note to its comment (and copied the posted text into a private note).
+        review.reloadNotes();
         setPromote(null);
         notify(
           'Added to your pending review on GitHub. Submit the review there when you are ready.',
@@ -388,6 +395,7 @@ function LoadedReview({
         // local notes remain in place and are never part of this request.
         for (const n of allNotes)
           if (noteState[n.id]?.promoted) patchNote(n.id, { promoted: false });
+        review.clearLocalLinks();
         setReviewSubmit(null);
         notify('Review submitted to GitHub. Private notes remain local.');
       })
@@ -660,6 +668,8 @@ function LoadedReview({
                   askingNoteId={askingNoteId}
                   onPromoteNote={startPromote}
                   promoteBlocked={promoteBlocked}
+                  onEditNote={editNote}
+                  syncBlocked={syncBlocked}
                 />
               ))}
               {noise.map((f) =>
@@ -689,6 +699,8 @@ function LoadedReview({
                     askingNoteId={askingNoteId}
                     onPromoteNote={startPromote}
                     promoteBlocked={promoteBlocked}
+                    onEditNote={editNote}
+                    syncBlocked={syncBlocked}
                   />
                 ) : (
                   <section key={f.fid} className="noise-file" aria-label={`${f.path}, collapsed`}>

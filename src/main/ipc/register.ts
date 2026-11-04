@@ -93,6 +93,8 @@ export function registerIpc(
   handle('notes:create', ({ subject, ...note }) => s.notes.create(subject, note));
   handle('notes:delete', ({ subject, id }) => s.notes.delete(subject, id));
   handle('notes:patchState', ({ subject, id, patch }) => s.notes.patchState(subject, id, patch));
+  // Lives in promote: a note linked to a pending GitHub comment is edited there too.
+  handle('notes:edit', ({ targetKey, id, body }) => s.promote.editNote(targetKey, id, body));
   handle('deepDive:open', ({ targetKey, noteId }) => s.deepDive.open(targetKey, noteId));
   handle('promote:preview', ({ targetKey, noteId }) => s.promote.preview(targetKey, noteId));
   handle('promote:confirm', ({ confirmToken, body }) => s.promote.confirm(confirmToken, body));

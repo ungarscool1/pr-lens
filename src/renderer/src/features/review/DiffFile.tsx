@@ -40,6 +40,8 @@ interface Props {
   askingNoteId: string | null;
   onPromoteNote: (id: string) => void;
   promoteBlocked: string | null;
+  onEditNote: (id: string, body: string) => Promise<boolean>;
+  syncBlocked: string | null;
 }
 
 const MARK = { add: '+', del: '−', ctx: '' } as const;
@@ -233,6 +235,8 @@ function DiffFileView(p: Props) {
             asking={p.askingNoteId === r.note.id}
             onPromote={() => p.onPromoteNote(r.note.id)}
             promoteBlocked={p.promoteBlocked}
+            onEdit={(body) => p.onEditNote(r.note.id, body)}
+            syncBlocked={p.syncBlocked}
           />
         );
       case 'composer': {

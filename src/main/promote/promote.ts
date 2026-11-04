@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { AppError } from '../../shared/errors';
-import type { PromotePreview } from '../../shared/ipc';
+import type { EditNoteResult, PromotePreview } from '../../shared/ipc';
+import { MAX_COMMENT_BODY, MAX_PRIVATE_BODY } from '../../shared/notes';
 import type { PrRef } from '../../shared/pr';
 import type { NotesService } from '../notes/notes';
 import { resolveNote } from '../notes/resolve';
@@ -8,7 +9,7 @@ import type { ResolvedNote } from '../notes/resolve';
 import type { AnalysisCache } from '../review/cache';
 import type { LoadedTarget, ReviewService } from '../review/service';
 import type { SettingsService } from '../settings/settings';
-import type { GitHubWriteClient, ThreadInput } from './write-client';
+import type { CommentInfo, GitHubWriteClient, ThreadInput } from './write-client';
 
 export interface PromoteService {
   /** What would be posted, plus a single-use token that `confirm` requires. Writes nothing. */
@@ -21,6 +22,12 @@ export interface PromoteService {
     event: 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES',
     body: string,
   ): Promise<{ url: string | null; state: string }>;
+  /**
+   * Edits a private or AI note. A note linked to the viewer's pending GitHub comment updates that
+   * comment too, after checking with GitHub that it is still pending, theirs and on this PR;
+   * otherwise only the local text changes.
+   */
+  editNote(targetKey: string, noteId: string, body: string): Promise<EditNoteResult>;
 }
 
 interface Deps {
@@ -33,9 +40,12 @@ interface Deps {
 }
 
 export const CONFIRM_TTL_MS = 2 * 60_000;
-export const MAX_BODY = 65_000;
+export const MAX_BODY = MAX_COMMENT_BODY;
 
-/** The comment as first shown in the dialog; the user edits it before confirming. */
+/**
+ * The comment as first shown in the dialog; the user edits it before confirming. For an AI
+ * note, `n.body` is already the user's edited body when there is one (see `resolveNote`).
+ */
 export function defaultBody(n: ResolvedNote): string {
   if (n.source === 'me') return n.body;
   return [`**${n.title}**`, '', n.body, ...(n.question ? ['', n.question] : [])].join('\n');
@@ -130,9 +140,13 @@ export function createPromote(d: Deps): PromoteService {
       }
       const reviewId =
         ctx.pendingReviewId ?? (await d.write.createPendingReview(ctx.prId, ctx.headSha));
-      const result = await d.write.addThread(reviewId, threadFor(n, text));
-      await d.notes.patchState(loaded.target.subject, n.id, { promoted: true });
-      return result;
+      const { url, commentId } = await d.write.addThread(reviewId, threadFor(n, text));
+      const s = loaded.target.subject;
+      await d.notes.patchState(s, n.id, { promoted: true });
+      if (commentId) await d.notes.setPublished(s, n.id, { commentId, body: text });
+      // The note keeps what was posted, including any changes made in the dialog.
+      if (n.source === 'me') await d.notes.updateBody(s, n.id, text);
+      return { url };
     },
 
     async submitReview(key, event, body) {
@@ -154,7 +168,89 @@ export function createPromote(d: Deps): PromoteService {
       }
       const reviewId =
         ctx.pendingReviewId ?? (await d.write.createPendingReview(ctx.prId, ctx.headSha));
-      return d.write.submitReview(reviewId, event, text);
+      const result = await d.write.submitReview(reviewId, event, text);
+      // Submitted comments are public now and must never be edited from here.
+      await d.notes.clearPublished(loaded.target.subject);
+      return result;
+    },
+
+    async editNote(key, noteId, body) {
+      const text = body.trim();
+      if (!text || text.length > MAX_BODY)
+        throw new AppError('BAD_INPUT', 'The note must be 1 to 65,000 characters.');
+      const loaded = d.review.loaded(key);
+      if (!loaded) throw new AppError('BAD_INPUT', 'Open the pull request again first.');
+      const s = loaded.target.subject;
+      const n = await note(loaded, noteId);
+
+      const saveLocal = async (): Promise<void> => {
+        if (n.source === 'me') await d.notes.updateBody(s, n.id, text);
+        else await d.notes.setEdit(s, n.id, text);
+      };
+      const done = async (
+        synced: EditNoteResult['synced'],
+        reason?: string,
+      ): Promise<EditNoteResult> => ({
+        notes: await d.notes.list(s),
+        synced,
+        ...(reason ? { reason } : {}),
+      });
+
+      const link = n.published;
+      if (!link) {
+        if (n.source === 'me' && text.length > MAX_PRIVATE_BODY)
+          throw new AppError('BAD_INPUT', 'A private note must be 1 to 10,000 characters.');
+        await saveLocal();
+        return done('local');
+      }
+
+      requireEnabled();
+      const { ref } = requirePr(key);
+      // Only NOT_FOUND means "this comment is gone"; any other failure (auth, network) is
+      // thrown before anything is saved, so the note and the comment never drift apart silently.
+      const goneOr = (err: unknown): string => {
+        if (AppError.from(err).code === 'NOT_FOUND')
+          return 'The comment is no longer on GitHub, so the edit was saved locally only.';
+        throw err;
+      };
+      let reason: string | null;
+      try {
+        reason = refusal(await d.write.pendingComment(link.commentId), ref);
+      } catch (err) {
+        reason = goneOr(err);
+      }
+      if (reason === null) {
+        try {
+          await d.write.updateComment(link.commentId, text);
+        } catch (err) {
+          reason = goneOr(err);
+        }
+      }
+      if (reason === null) {
+        await d.notes.setPublished(s, n.id, { commentId: link.commentId, body: text });
+        if (n.source === 'me') await d.notes.updateBody(s, n.id, text);
+        return done('github');
+      }
+      await d.notes.setPublished(s, n.id, null);
+      await d.notes.patchState(s, n.id, { promoted: false });
+      await saveLocal();
+      return done('local', reason);
     },
   };
+}
+
+/** Why a linked comment must not be edited, or null when it is the viewer's pending one on `ref`. */
+export function refusal(c: CommentInfo | null, ref: PrRef): string | null {
+  if (!c) return 'The comment is no longer on GitHub, so the edit was saved locally only.';
+  if (c.state !== 'PENDING')
+    return 'The review with this comment was already submitted, so the edit was saved locally only.';
+  if (c.author !== c.viewer || !c.viewerCanUpdate)
+    return 'That GitHub comment is not one you can edit, so the edit was saved locally only.';
+  const same =
+    c.owner.toLowerCase() === ref.owner.toLowerCase() &&
+    c.repo.toLowerCase() === ref.repo.toLowerCase() &&
+    c.number === ref.number;
+  if (!same)
+    return 'That GitHub comment is on another pull request, so the edit was saved locally only.';
+  return null;
 }

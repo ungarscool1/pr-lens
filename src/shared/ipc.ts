@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import type { DiffModel } from './diff';
 import type { Health } from './health';
-import { CreateNoteInput, DeleteNoteInput, NoteId, PatchNoteStateInput } from './notes';
+import {
+  CreateNoteInput,
+  DeleteNoteInput,
+  EditNoteInput,
+  NoteId,
+  PatchNoteStateInput,
+} from './notes';
 import type { NotesFile, PrivateNote } from './notes';
 import { PrInput, PrRef } from './pr';
 import type { PrMeta } from './pr';
@@ -47,6 +53,15 @@ export interface PromotePreview {
   /** A pending review exists and the comment joins it; otherwise one is started. */
   pendingReviewExists: boolean;
   body: string;
+}
+
+/** The notes file after an edit, and where the edit was saved. */
+export interface EditNoteResult {
+  notes: NotesFile;
+  /** `github`: the pending review comment was updated too; `local`: only the note changed. */
+  synced: 'github' | 'local';
+  /** Why a note linked to a pending comment was saved locally only. */
+  reason?: string;
 }
 
 export const CompareInput = RepoRef.extend({
@@ -110,6 +125,7 @@ export const contract = {
   'notes:create': { input: CreateNoteInput, output: z.custom<PrivateNote>() },
   'notes:delete': { input: DeleteNoteInput, output: z.custom<void>() },
   'notes:patchState': { input: PatchNoteStateInput, output: z.custom<void>() },
+  'notes:edit': { input: EditNoteInput, output: z.custom<EditNoteResult>() },
   'deepDive:open': {
     input: z.object({ targetKey: TargetKey, noteId: NoteId }).strict(),
     output: z.custom<{ worktreePath: string; scriptPath: string; terminalApp: string }>(),
