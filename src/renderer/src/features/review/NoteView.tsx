@@ -23,6 +23,10 @@ interface NoteProps {
   onPromote: () => void;
   /** Why promoting is not possible here (setting off, compare range), or null. */
   promoteBlocked: string | null;
+  /** Saves a new body; resolves false when it failed and the editor should stay open. */
+  onEdit: (body: string) => Promise<boolean>;
+  /** Why a note linked to a pending GitHub comment cannot be edited now (setting off), or null. */
+  syncBlocked: string | null;
 }
 
 export const noteDomId = (id: string): string => `note-${id}`;
@@ -74,13 +78,34 @@ function NoteCard({
   asking,
   onPromote,
   promoteBlocked,
+  onEdit,
+  syncBlocked,
   sevKind,
   sevLabel,
   who,
 }: NoteProps & { sevKind: 'high' | 'medium' | 'low' | 'mine'; sevLabel: string; who: string }) {
   const [copied, setCopied] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const isAi = n.source === 'ai';
   const titleId = `${noteDomId(n.id)}-title`;
+  const editId = `${noteDomId(n.id)}-edit`;
+  const editBlocked = n.linked ? syncBlocked : null;
+  const editLabel = n.linked
+    ? 'Saving updates your pending GitHub comment'
+    : st.promoted
+      ? 'Saved here only; your GitHub comment is not changed'
+      : isAi
+        ? 'Edit note · only you see this'
+        : 'Private note · only you see this';
+  const save = async (): Promise<void> => {
+    const text = draft?.trim() ?? '';
+    if (!text || saving) return;
+    setSaving(true);
+    const ok = await onEdit(text);
+    setSaving(false);
+    if (ok) setDraft(null);
+  };
   const loc = isAi
     ? n.fileLevel
       ? 'file-level'
@@ -110,6 +135,7 @@ function NoteCard({
         </span>
         <SevTag kind={sevKind}>{sevLabel}</SevTag>
         {isAi && <span className="tag tag-neutral">{CATEGORY_LABELS[n.category]}</span>}
+        {isAi && n.edited && <span className="tag tag-outline">Edited</span>}
         {st.seen && <span className="tag tag-outline">Seen</span>}
         {st.promoted && <span className="tag tag-accent">In your pending review</span>}
         <span className="note-loc">{loc}</span>
@@ -131,7 +157,43 @@ function NoteCard({
           Private note
         </span>
       )}
-      <p className="note-body">{n.body}</p>
+      {draft === null ? (
+        <p className="note-body">{n.body}</p>
+      ) : (
+        <>
+          <label className="kicker-mono" htmlFor={editId}>
+            {editLabel}
+          </label>
+          <textarea
+            id={editId}
+            className="input"
+            style={{ minHeight: 76, fontSize: 14 }}
+            autoFocus
+            value={draft}
+            maxLength={65_000}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setDraft(null);
+              }
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save();
+            }}
+          />
+          <div className="composer-actions">
+            <button className="btn btn-ghost" onClick={() => setDraft(null)} disabled={saving}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => void save()}
+              disabled={!draft.trim() || saving}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </>
+      )}
       {isAi && n.refs.length > 0 && (
         <div className="refs">
           {n.refs.map((id) => {
@@ -183,6 +245,19 @@ function NoteCard({
         >
           <Icon name="arrowUpRight" />
           Promote to comment
+        </button>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setDraft(n.body)}
+          disabled={draft !== null || editBlocked !== null}
+          title={
+            editBlocked ??
+            (n.linked
+              ? 'Edit this note and its comment in your pending GitHub review'
+              : 'Edit this note')
+          }
+        >
+          Edit
         </button>
         <span className="spacer" />
         <button

@@ -61,6 +61,24 @@ describe('notes', () => {
     ]);
   });
 
+  it('shows the posted text first, then the edited AI body, then the original', () => {
+    const shown = toViewNotes(
+      [ai('ai-plain', 3, { body: 'orig' }), ai('ai-edit', 2, { body: 'orig' }), ai('ai-both', 1)],
+      [mine, { ...mine, id: 'me-linked1' }],
+      { 'ai-edit': { body: 'edited' }, 'ai-both': { body: 'edited' } },
+      { 'ai-both': { commentId: 'PRRC_1', body: 'posted' }, 'me-linked1': { commentId: 'PRRC_2', body: 'posted mine' } },
+    );
+    expect(shown.map((n) => [n.id, n.body, n.edited, n.linked])).toEqual([
+      ['ai-plain', 'orig', false, false],
+      ['ai-edit', 'edited', true, false],
+      ['ai-both', 'posted', true, true],
+      ['me-abcd1234', 'mine', false, false],
+      ['me-linked1', 'posted mine', false, true],
+    ]);
+    // Title and question stay the AI's own.
+    expect(shown[1]).toMatchObject({ title: 'ai-edit' });
+  });
+
   it('highlights only open notes', () => {
     const hl = highlightedLines(notes, { 'ai-top': { collapsed: true } });
     expect([...hl.RIGHT]).toEqual([41]);

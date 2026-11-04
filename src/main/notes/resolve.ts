@@ -1,5 +1,6 @@
 import { AppError } from '../../shared/errors';
 import type { Side } from '../../shared/diff';
+import type { PublishedLink } from '../../shared/notes';
 import { CATEGORY_LABELS } from '../../shared/review';
 import type { Settings } from '../../shared/settings';
 import type { AnalysisCache } from '../review/cache';
@@ -14,7 +15,12 @@ export interface ResolvedNote {
   label: string;
   /** AI title, or the first line of a private note. */
   title: string;
+  /** For AI notes, the user's edited body when there is one. */
   body: string;
+  /** The AI note's body was replaced by the user. */
+  edited?: true;
+  /** The note's comment in the viewer's pending GitHub review, if it was linked. */
+  published?: PublishedLink;
   question?: string;
   path: string;
   side: Side;
@@ -31,16 +37,22 @@ export async function resolveNote(
   noteId: string,
 ): Promise<ResolvedNote> {
   const { subject, headSha } = loaded.target;
+  const file = await d.notes.list(subject);
+  const published = file.published[noteId];
+  const link = published ? { published } : {};
   if (noteId.startsWith('ai-')) {
     const hit = await d.cache.get(subject, headSha, d.settings());
     const n = hit?.analysis.notes.find((x) => x.id === noteId);
     if (!n) throw new AppError('NOT_FOUND', 'That note is no longer in the review.');
+    const edit = file.edits[noteId];
     return {
       id: n.id,
       source: 'ai',
       label: `[${n.severity} · ${CATEGORY_LABELS[n.category].toLowerCase()}]`,
       title: n.title,
-      body: n.body,
+      body: edit?.body ?? n.body,
+      ...(edit ? { edited: true as const } : {}),
+      ...link,
       ...(n.question ? { question: n.question } : {}),
       path: n.path,
       side: n.side,
@@ -49,7 +61,7 @@ export async function resolveNote(
       fileLevel: n.fileLevel,
     };
   }
-  const mine = (await d.notes.list(subject)).mine.find((x) => x.id === noteId);
+  const mine = file.mine.find((x) => x.id === noteId);
   if (!mine) throw new AppError('NOT_FOUND', 'That note was deleted.');
   return {
     id: mine.id,
@@ -57,6 +69,7 @@ export async function resolveNote(
     label: '[private]',
     title: mine.body.split('\n')[0]?.slice(0, 120) ?? '',
     body: mine.body,
+    ...link,
     path: mine.path,
     side: mine.side,
     startLine: mine.line,

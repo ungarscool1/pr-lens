@@ -217,7 +217,9 @@ describe('deep dive service', () => {
       cache: {
         get: async () => ({ analysis: analysis(), stale: false }),
       } as unknown as AnalysisCache,
-      notes: { list: async () => ({ mine: [], state: {} }) } as unknown as NotesService,
+      notes: {
+        list: async () => ({ mine: [], state: {}, edits: {}, published: {} }),
+      } as unknown as NotesService,
       settings: { current: () => settings } as unknown as SettingsService,
       sessionsDir,
       platform,

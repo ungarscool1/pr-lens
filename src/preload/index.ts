@@ -42,6 +42,7 @@ const api = {
     create: call('notes:create'),
     delete: call('notes:delete'),
     patchState: call('notes:patchState'),
+    edit: call('notes:edit'),
   },
   deepDive: { open: call('deepDive:open') },
   promote: {
